@@ -874,8 +874,9 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 'v') { pasteSelection(); return; }
   if (e.ctrlKey && e.key === 'x') { cutSelection(); return; }
 
-  // Skip if focused on formula bar or file name
-  if (document.activeElement.id === 'formula-input' || document.activeElement.id === 'file-name') return;
+  // Skip if focused on any input/select outside the sheet
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA') && !ae.classList.contains('cell-input')) return;
 
   // If editing, let the input handle it
   if (editingCell) {
