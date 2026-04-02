@@ -466,11 +466,9 @@ function evaluateFormula(formula, sheetIdx) {
     const expr = formula.substring(1).toUpperCase();
     const sheet = sheets[sheetIdx];
 
-    // Handle VLOOKUP specially before resolving references
-    const vlookupMatch = expr.match(/^VLOOKUP\((.+)$/);
-    if (vlookupMatch) {
-      return evalVlookup(expr, sheet, sheetIdx);
-    }
+    // Handle VLOOKUP/HLOOKUP specially before resolving references
+    if (expr.startsWith('VLOOKUP(')) return evalVlookup(expr, sheet, sheetIdx);
+    if (expr.startsWith('HLOOKUP(')) return evalHlookup(expr, sheet, sheetIdx);
 
     // Replace cell references with values
     const resolved = expr.replace(/\b([A-Z])(\d+):([A-Z])(\d+)\b/g, (_, c1, r1, c2, r2) => {
@@ -509,6 +507,28 @@ function evaluateFormula(formula, sheetIdx) {
       RAND: () => Math.random(),
       RANDBETWEEN: (args) => { const [lo, hi] = args.map(toNum); return Math.floor(Math.random() * (hi - lo + 1)) + lo; },
       PI: () => Math.PI,
+      PRODUCT: (arr) => flat(arr).map(toNum).reduce((a, b) => a * b, 1),
+      INT: (args) => Math.trunc(toNum(args[0])),
+      SIGN: (args) => Math.sign(toNum(args[0])),
+      LOG: (args) => args.length > 1 ? Math.log(toNum(args[0])) / Math.log(toNum(args[1])) : Math.log10(toNum(args[0])),
+      LOG10: (args) => Math.log10(toNum(args[0])),
+      LN: (args) => Math.log(toNum(args[0])),
+      EXP: (args) => Math.exp(toNum(args[0])),
+      SIN: (args) => Math.sin(toNum(args[0])),
+      COS: (args) => Math.cos(toNum(args[0])),
+      TAN: (args) => Math.tan(toNum(args[0])),
+      ASIN: (args) => Math.asin(toNum(args[0])),
+      ACOS: (args) => Math.acos(toNum(args[0])),
+      ATAN: (args) => Math.atan(toNum(args[0])),
+      DEGREES: (args) => toNum(args[0]) * (180 / Math.PI),
+      RADIANS: (args) => toNum(args[0]) * (Math.PI / 180),
+      LARGE: (args) => { const sorted = flat(Array.isArray(args[0]) ? args[0] : [args[0]]).map(toNum).sort((a, b) => b - a); return sorted[toNum(args[1]) - 1] ?? '#NUM'; },
+      SMALL: (args) => { const sorted = flat(Array.isArray(args[0]) ? args[0] : [args[0]]).map(toNum).sort((a, b) => a - b); return sorted[toNum(args[1]) - 1] ?? '#NUM'; },
+      RANK: (args) => { const [val, range] = args; const arr = flat(Array.isArray(range) ? range : [range]).map(toNum).sort((a, b) => b - a); return arr.indexOf(toNum(val)) + 1 || '#N/A'; },
+      STDEV: (arr) => { const f = flat(arr).map(toNum); const avg = f.reduce((a, b) => a + b, 0) / f.length; return Math.sqrt(f.reduce((s, v) => s + (v - avg) ** 2, 0) / (f.length - 1)); },
+      VAR: (arr) => { const f = flat(arr).map(toNum); const avg = f.reduce((a, b) => a + b, 0) / f.length; return f.reduce((s, v) => s + (v - avg) ** 2, 0) / (f.length - 1); },
+      MODE: (arr) => { const f = flat(arr).map(toNum); const freq = {}; f.forEach(v => freq[v] = (freq[v] || 0) + 1); return +Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0]; },
+      PERCENTILE: (args) => { const arr = flat(Array.isArray(args[0]) ? args[0] : [args[0]]).map(toNum).sort((a, b) => a - b); const k = toNum(args[1]); const i = k * (arr.length - 1); const lo = Math.floor(i); const hi = Math.ceil(i); return lo === hi ? arr[lo] : arr[lo] + (arr[hi] - arr[lo]) * (i - lo); },
 
       // Logic
       IF: (args) => args[0] ? args[1] : args[2],
@@ -516,9 +536,19 @@ function evaluateFormula(formula, sheetIdx) {
       OR: (arr) => flat(arr).some(Boolean),
       NOT: (args) => !args[0],
       IFERROR: (args) => { try { return args[0] !== '#ERROR' && args[0] !== '#ERR' ? args[0] : args[1]; } catch { return args[1]; } },
+      IFS: (args) => { for (let i = 0; i < args.length; i += 2) { if (args[i]) return args[i + 1]; } return '#N/A'; },
+      SWITCH: (args) => { const val = args[0]; for (let i = 1; i < args.length - 1; i += 2) { if (val == args[i]) return args[i + 1]; } return args.length % 2 === 0 ? args[args.length - 1] : '#N/A'; },
+      CHOOSE: (args) => { const idx = toNum(args[0]); return args[idx] ?? '#VALUE'; },
+      ISBLANK: (args) => args[0] === '' || args[0] === null || args[0] === undefined || args[0] === 0,
+      ISNUMBER: (args) => typeof args[0] === 'number' || !isNaN(+args[0]),
+      ISTEXT: (args) => typeof args[0] === 'string' && isNaN(+args[0]),
+      ISERROR: (args) => String(args[0]).startsWith('#'),
+      ISEVEN: (args) => toNum(args[0]) % 2 === 0,
+      ISODD: (args) => toNum(args[0]) % 2 !== 0,
 
       // Lookup
       VLOOKUP: (args) => '#USE_SPECIAL',
+      HLOOKUP: (args) => '#USE_SPECIAL_H',
       INDEX: (args) => {
         const [range, rowIdx, colIdx] = args;
         if (Array.isArray(range)) return range[toNum(rowIdx) - 1] ?? '#REF';
@@ -530,6 +560,10 @@ function evaluateFormula(formula, sheetIdx) {
         const idx = arr.findIndex(v => v == needle || String(v).toLowerCase() === String(needle).toLowerCase());
         return idx >= 0 ? idx + 1 : '#N/A';
       },
+      ROW: (args) => selectedCell.row + 1,
+      COLUMN: (args) => selectedCell.col + 1,
+      ROWS: (args) => Array.isArray(args[0]) ? args[0].length : 1,
+      COLUMNS: (args) => 1,
 
       // Text
       CONCATENATE: (args) => flat(args).join(''),
@@ -543,11 +577,21 @@ function evaluateFormula(formula, sheetIdx) {
       LOWER: (args) => String(args[0]).toLowerCase(),
       PROPER: (args) => String(args[0]).replace(/\b\w/g, c => c.toUpperCase()),
       TRIM: (args) => String(args[0]).trim(),
+      CLEAN: (args) => String(args[0]).replace(/[\x00-\x1F]/g, ''),
+      EXACT: (args) => String(args[0]) === String(args[1]),
+      REPLACE: (args) => { const s = String(args[0]); const start = toNum(args[1]) - 1; const len = toNum(args[2]); return s.substring(0, start) + String(args[3]) + s.substring(start + len); },
       SUBSTITUTE: (args) => { const [text, old, rep, nth] = args; if (nth) { let i = 0; return String(text).replace(new RegExp(escapeRegex(String(old)), 'g'), m => (++i === toNum(nth)) ? rep : m); } return String(text).split(String(old)).join(String(rep)); },
       FIND: (args) => { const idx = String(args[1]).indexOf(String(args[0]), toNum(args[2] ?? 1) - 1); return idx >= 0 ? idx + 1 : '#VALUE'; },
       SEARCH: (args) => { const idx = String(args[1]).toLowerCase().indexOf(String(args[0]).toLowerCase(), toNum(args[2] ?? 1) - 1); return idx >= 0 ? idx + 1 : '#VALUE'; },
       REPT: (args) => String(args[0]).repeat(toNum(args[1])),
       TEXT: (args) => formatText(args[0], String(args[1])),
+      VALUE: (args) => toNum(String(args[0]).replace(/[^0-9.\-]/g, '')),
+      DOLLAR: (args) => '$' + toNum(args[0]).toFixed(toNum(args[1] ?? 2)),
+      FIXED: (args) => toNum(args[0]).toFixed(toNum(args[1] ?? 2)),
+      CHAR: (args) => String.fromCharCode(toNum(args[0])),
+      CODE: (args) => String(args[0]).charCodeAt(0),
+      T: (args) => typeof args[0] === 'string' ? args[0] : '',
+      N: (args) => typeof args[0] === 'number' ? args[0] : 0,
 
       // Date
       NOW: () => new Date().toLocaleString(),
@@ -555,8 +599,24 @@ function evaluateFormula(formula, sheetIdx) {
       YEAR: (args) => new Date(args[0]).getFullYear(),
       MONTH: (args) => new Date(args[0]).getMonth() + 1,
       DAY: (args) => new Date(args[0]).getDate(),
+      HOUR: (args) => new Date(args[0]).getHours(),
+      MINUTE: (args) => new Date(args[0]).getMinutes(),
+      SECOND: (args) => new Date(args[0]).getSeconds(),
       DAYS: (args) => Math.round((new Date(args[0]) - new Date(args[1])) / 86400000),
       EDATE: (args) => { const d = new Date(args[0]); d.setMonth(d.getMonth() + toNum(args[1])); return d.toLocaleDateString(); },
+      EOMONTH: (args) => { const d = new Date(args[0]); d.setMonth(d.getMonth() + toNum(args[1]) + 1, 0); return d.toLocaleDateString(); },
+      DATE: (args) => new Date(toNum(args[0]), toNum(args[1]) - 1, toNum(args[2])).toLocaleDateString(),
+      WEEKDAY: (args) => new Date(args[0]).getDay() + 1,
+      WEEKNUM: (args) => { const d = new Date(args[0]); const start = new Date(d.getFullYear(), 0, 1); return Math.ceil(((d - start) / 86400000 + start.getDay() + 1) / 7); },
+      NETWORKDAYS: (args) => { const s = new Date(args[0]); const e = new Date(args[1]); let count = 0; const d = new Date(s); while (d <= e) { const day = d.getDay(); if (day !== 0 && day !== 6) count++; d.setDate(d.getDate() + 1); } return count; },
+      DATEDIF: (args) => { const s = new Date(args[0]); const e = new Date(args[1]); const unit = String(args[2]).toUpperCase(); if (unit === 'D') return Math.round((e - s) / 86400000); if (unit === 'M') return (e.getFullYear() - s.getFullYear()) * 12 + e.getMonth() - s.getMonth(); if (unit === 'Y') return e.getFullYear() - s.getFullYear(); return '#VALUE'; },
+
+      // Financial
+      PMT: (args) => { const [rate, nper, pv, fv = 0] = args.map(toNum); const r = rate; if (r === 0) return -(pv + fv) / nper; return -(pv * r * Math.pow(1 + r, nper) + fv * r) / (Math.pow(1 + r, nper) - 1); },
+      FV: (args) => { const [rate, nper, pmt, pv = 0] = args.map(toNum); const r = rate; if (r === 0) return -(pv + pmt * nper); return -(pv * Math.pow(1 + r, nper) + pmt * (Math.pow(1 + r, nper) - 1) / r); },
+      PV: (args) => { const [rate, nper, pmt, fv = 0] = args.map(toNum); const r = rate; if (r === 0) return -(fv + pmt * nper); return -(fv / Math.pow(1 + r, nper) + pmt * (1 - Math.pow(1 + r, -nper)) / r); },
+      NPV: (args) => { const rate = toNum(args[0]); const flows = flat(args.slice(1)).map(toNum); return flows.reduce((sum, cf, i) => sum + cf / Math.pow(1 + rate, i + 1), 0); },
+      IRR: (args) => { const flows = flat(Array.isArray(args[0]) ? args[0] : args).map(toNum); let guess = 0.1; for (let iter = 0; iter < 100; iter++) { let npv = 0, dnpv = 0; flows.forEach((cf, i) => { npv += cf / Math.pow(1 + guess, i); dnpv -= i * cf / Math.pow(1 + guess, i + 1); }); const next = guess - npv / dnpv; if (Math.abs(next - guess) < 1e-10) return Math.round(next * 1e8) / 1e8; guess = next; } return '#NUM'; },
     };
 
     function matchCriteria(val, criteria) {
@@ -634,6 +694,35 @@ function evalVlookup(expr, sheet, sheetIdx) {
 
     if (String(lookupVal).toLowerCase() === String(needle).toLowerCase() || lookupVal == needle) {
       const resultCell = sheet.cells[cellKey(r, c1 + colIdx - 1)];
+      if (!resultCell) return '';
+      return resultCell.formula ? evaluateFormula(resultCell.formula, sheetIdx) : resultCell.value;
+    }
+  }
+  return '#N/A';
+}
+
+function evalHlookup(expr, sheet, sheetIdx) {
+  const inner = expr.slice(8, -1);
+  const parts = splitTopLevel(inner);
+  if (parts.length < 3) return '#ERR';
+
+  const needle = resolveValue(parts[0].trim(), sheet, sheetIdx);
+  const rowIdx = toNum(resolveValue(parts[2].trim(), sheet, sheetIdx));
+
+  const rangeMatch = parts[1].trim().match(/^([A-Z])(\d+):([A-Z])(\d+)$/);
+  if (!rangeMatch) return '#ERR';
+
+  const c1 = rangeMatch[1].charCodeAt(0) - 65;
+  const r1 = +rangeMatch[2] - 1;
+  const c2 = rangeMatch[3].charCodeAt(0) - 65;
+  const r2 = +rangeMatch[4] - 1;
+
+  // Search first row for needle
+  for (let c = c1; c <= c2; c++) {
+    const lookupCell = sheet.cells[cellKey(r1, c)];
+    const lookupVal = lookupCell ? (lookupCell.formula ? evaluateFormula(lookupCell.formula, sheetIdx) : lookupCell.value) : '';
+    if (String(lookupVal).toLowerCase() === String(needle).toLowerCase() || lookupVal == needle) {
+      const resultCell = sheet.cells[cellKey(r1 + rowIdx - 1, c)];
       if (!resultCell) return '';
       return resultCell.formula ? evaluateFormula(resultCell.formula, sheetIdx) : resultCell.value;
     }
