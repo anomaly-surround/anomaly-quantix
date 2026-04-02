@@ -24,6 +24,7 @@
           <button onclick="exportCSV()" title="Export CSV"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</button>
           <button onclick="exportExcel()" title="Export Excel"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Excel</button>
           <button onclick="showTemplates()" title="Templates"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> Templates</button>
+          <button onclick="document.getElementById('shortcuts-modal').style.display='flex'" title="Shortcuts"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="6" y1="16" x2="6" y2="16"/><line x1="10" y1="16" x2="14" y2="16"/><line x1="18" y1="16" x2="18" y2="16"/></svg> Shortcuts</button>
         </div>
       </div>
     </header>
@@ -96,6 +97,58 @@
       </div>
       <div class="status-right">
         <span id="status-sum" title="Quick stats for selection"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shortcuts Modal -->
+  <div class="modal-overlay" id="shortcuts-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>Keyboard Shortcuts</h2>
+        <button onclick="document.getElementById('shortcuts-modal').style.display='none'">&times;</button>
+      </div>
+      <div class="modal-body shortcuts-body">
+        <div class="shortcut-section">
+          <h3>Navigation</h3>
+          <div class="shortcut-row"><kbd>Arrow Keys</kbd><span>Move between cells</span></div>
+          <div class="shortcut-row"><kbd>Tab</kbd><span>Next cell</span></div>
+          <div class="shortcut-row"><kbd>Shift + Tab</kbd><span>Previous cell</span></div>
+          <div class="shortcut-row"><kbd>Home</kbd><span>Jump to column A</span></div>
+          <div class="shortcut-row"><kbd>End</kbd><span>Jump to column Z</span></div>
+          <div class="shortcut-row"><kbd>Enter</kbd><span>Edit cell / Confirm & move down</span></div>
+          <div class="shortcut-row"><kbd>F2</kbd><span>Edit cell</span></div>
+          <div class="shortcut-row"><kbd>Escape</kbd><span>Cancel editing</span></div>
+          <div class="shortcut-row"><kbd>Delete</kbd><span>Clear cell</span></div>
+        </div>
+        <div class="shortcut-section">
+          <h3>Formatting</h3>
+          <div class="shortcut-row"><kbd>Ctrl + B</kbd><span>Bold</span></div>
+          <div class="shortcut-row"><kbd>Ctrl + I</kbd><span>Italic</span></div>
+          <div class="shortcut-row"><kbd>Ctrl + U</kbd><span>Underline</span></div>
+        </div>
+        <div class="shortcut-section">
+          <h3>File</h3>
+          <div class="shortcut-row"><kbd>Ctrl + S</kbd><span>Save file</span></div>
+          <div class="shortcut-row"><kbd>Ctrl + O</kbd><span>Open file</span></div>
+        </div>
+        <div class="shortcut-section">
+          <h3>Editing</h3>
+          <div class="shortcut-row"><kbd>Ctrl + Z</kbd><span>Undo</span></div>
+          <div class="shortcut-row"><kbd>Ctrl + Y</kbd><span>Redo</span></div>
+          <div class="shortcut-row"><kbd>Ctrl + C</kbd><span>Copy</span></div>
+          <div class="shortcut-row"><kbd>Ctrl + X</kbd><span>Cut</span></div>
+          <div class="shortcut-row"><kbd>Ctrl + V</kbd><span>Paste</span></div>
+          <div class="shortcut-row"><kbd>Start typing</kbd><span>Replace cell content</span></div>
+        </div>
+        <div class="shortcut-section">
+          <h3>Mouse</h3>
+          <div class="shortcut-row"><kbd>Click</kbd><span>Select cell</span></div>
+          <div class="shortcut-row"><kbd>Shift + Click</kbd><span>Select range</span></div>
+          <div class="shortcut-row"><kbd>Double-click</kbd><span>Edit cell</span></div>
+          <div class="shortcut-row"><kbd>Right-click</kbd><span>Context menu (insert rows, sort, clear)</span></div>
+          <div class="shortcut-row"><kbd>Drag column edge</kbd><span>Resize column</span></div>
+        </div>
       </div>
     </div>
   </div>
