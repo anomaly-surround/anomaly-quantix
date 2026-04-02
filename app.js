@@ -203,7 +203,28 @@ function attachCellEvents() {
     const row = +td.dataset.row;
     const col = +td.dataset.col;
 
-    if (editingCell) commitEdit();
+    // If editing a formula, clicking another cell inserts its reference
+    if (editingCell) {
+      const editTd = getCellTd(editingCell.row, editingCell.col);
+      const input = editTd?.querySelector('input');
+      if (input && input.value.startsWith('=')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const ref = COL_LETTERS[col] + (row + 1);
+        insertAtCursor(input, ref);
+        return;
+      }
+      commitEdit();
+    }
+
+    // Also check if formula bar is focused and has a formula
+    const formulaInput = document.getElementById('formula-input');
+    if (document.activeElement === formulaInput && formulaInput.value.startsWith('=')) {
+      e.preventDefault();
+      const ref = COL_LETTERS[col] + (row + 1);
+      insertAtCursor(formulaInput, ref);
+      return;
+    }
 
     if (e.shiftKey) {
       selectionRange = {
@@ -1123,17 +1144,46 @@ function showContextMenu(x, y, row, col) {
   menu.className = 'context-menu';
   menu.style.left = x + 'px';
   menu.style.top = y + 'px';
-  menu.innerHTML = `
+
+  // Check if we have a multi-cell selection to show quick formulas
+  const hasRange = selectionRange &&
+    (selectionRange.startRow !== selectionRange.endRow || selectionRange.startCol !== selectionRange.endCol);
+
+  const rangeRef = hasRange ? getRangeRef() : '';
+
+  let html = `
     <button onclick="cutSelection();removeContextMenu()">Cut</button>
     <button onclick="copySelection();removeContextMenu()">Copy</button>
-    <button onclick="pasteSelection();removeContextMenu()">Paste</button>
+    <button onclick="pasteSelection();removeContextMenu()">Paste</button>`;
+
+  if (hasRange) {
+    html += `
+    <div class="separator"></div>
+    <div class="context-submenu">
+      <button class="submenu-trigger" onclick="toggleSubmenu(event)">Quick Formula &rarr;</button>
+      <div class="submenu">
+        <button onclick="quickFormula('SUM','${rangeRef}');removeContextMenu()">SUM</button>
+        <button onclick="quickFormula('AVERAGE','${rangeRef}');removeContextMenu()">AVERAGE</button>
+        <button onclick="quickFormula('COUNT','${rangeRef}');removeContextMenu()">COUNT</button>
+        <button onclick="quickFormula('MIN','${rangeRef}');removeContextMenu()">MIN</button>
+        <button onclick="quickFormula('MAX','${rangeRef}');removeContextMenu()">MAX</button>
+        <button onclick="quickFormula('MEDIAN','${rangeRef}');removeContextMenu()">MEDIAN</button>
+        <button onclick="quickFormula('PRODUCT','${rangeRef}');removeContextMenu()">PRODUCT</button>
+        <button onclick="quickFormula('STDEV','${rangeRef}');removeContextMenu()">STDEV</button>
+        <button onclick="quickFormula('COUNTIF','${rangeRef}');removeContextMenu()">COUNTIF...</button>
+        <button onclick="quickFormula('SUMIF','${rangeRef}');removeContextMenu()">SUMIF...</button>
+      </div>
+    </div>`;
+  }
+
+  html += `
     <div class="separator"></div>
     <button onclick="insertRowAbove(${row});removeContextMenu()">Insert Row Above</button>
     <button onclick="insertRowBelow(${row});removeContextMenu()">Insert Row Below</button>
     <div class="separator"></div>
     <button onclick="deleteSelection();removeContextMenu()">Clear Contents</button>
-    <button onclick="sortColumn(${col}, true);removeContextMenu()">Sort A → Z</button>
-    <button onclick="sortColumn(${col}, false);removeContextMenu()">Sort Z → A</button>
+    <button onclick="sortColumn(${col}, true);removeContextMenu()">Sort A &rarr; Z</button>
+    <button onclick="sortColumn(${col}, false);removeContextMenu()">Sort Z &rarr; A</button>
     <div class="separator"></div>
     <button onclick="freezeAt(${row}, ${col});removeContextMenu()">Freeze Above & Left</button>
     <button onclick="unfreeze();removeContextMenu()">Unfreeze Panes</button>
@@ -1141,6 +1191,8 @@ function showContextMenu(x, y, row, col) {
     <button onclick="showConditionalFormat(${row}, ${col});removeContextMenu()">Conditional Format...</button>
     <button onclick="showDataValidation(${row}, ${col});removeContextMenu()">Data Validation...</button>
   `;
+
+  menu.innerHTML = html;
   document.body.appendChild(menu);
 
   // Adjust if off-screen
@@ -1149,6 +1201,65 @@ function showContextMenu(x, y, row, col) {
   if (rect.bottom > window.innerHeight) menu.style.top = (y - rect.height) + 'px';
 
   setTimeout(() => document.addEventListener('click', removeContextMenu, { once: true }), 10);
+}
+
+function getRangeRef() {
+  if (!selectionRange) return '';
+  const r1 = Math.min(selectionRange.startRow, selectionRange.endRow);
+  const r2 = Math.max(selectionRange.startRow, selectionRange.endRow);
+  const c1 = Math.min(selectionRange.startCol, selectionRange.endCol);
+  const c2 = Math.max(selectionRange.startCol, selectionRange.endCol);
+  return COL_LETTERS[c1] + (r1 + 1) + ':' + COL_LETTERS[c2] + (r2 + 1);
+}
+
+function quickFormula(func, rangeRef) {
+  // Find the cell right below or to the right of the selection to put the result
+  const r1 = Math.min(selectionRange.startRow, selectionRange.endRow);
+  const r2 = Math.max(selectionRange.startRow, selectionRange.endRow);
+  const c1 = Math.min(selectionRange.startCol, selectionRange.endCol);
+  const c2 = Math.max(selectionRange.startCol, selectionRange.endCol);
+
+  let targetRow, targetCol;
+
+  // If vertical range (single column), put result below
+  if (c1 === c2) {
+    targetRow = r2 + 1;
+    targetCol = c1;
+  }
+  // If horizontal range (single row), put result to the right
+  else if (r1 === r2) {
+    targetRow = r1;
+    targetCol = c2 + 1;
+  }
+  // Multi-row multi-col: put result below-left
+  else {
+    targetRow = r2 + 1;
+    targetCol = c1;
+  }
+
+  // For COUNTIF/SUMIF, prompt for criteria
+  let formula;
+  if (func === 'COUNTIF') {
+    const criteria = prompt('Count cells where value:', '>0');
+    if (criteria === null) return;
+    formula = `=${func}(${rangeRef},"${criteria}")`;
+  } else if (func === 'SUMIF') {
+    const criteria = prompt('Sum cells where value:', '>0');
+    if (criteria === null) return;
+    formula = `=${func}(${rangeRef},"${criteria}")`;
+  } else {
+    formula = `=${func}(${rangeRef})`;
+  }
+
+  selectCell(targetRow, targetCol);
+  setCellValue(targetRow, targetCol, formula);
+  document.getElementById('status-info').textContent = `${func} inserted at ${COL_LETTERS[targetCol]}${targetRow + 1}`;
+}
+
+function toggleSubmenu(e) {
+  e.stopPropagation();
+  const submenu = e.target.nextElementSibling;
+  submenu.classList.toggle('show');
 }
 
 function removeContextMenu() {
@@ -1881,6 +1992,17 @@ function forEachSelected(fn) {
   } else {
     fn(selectedCell.row, selectedCell.col);
   }
+}
+
+function insertAtCursor(input, text) {
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  const val = input.value;
+  // If cursor is right after a letter/number, add the ref; otherwise just insert
+  input.value = val.substring(0, start) + text + val.substring(end);
+  const newPos = start + text.length;
+  input.setSelectionRange(newPos, newPos);
+  input.focus();
 }
 
 function escapeHTML(str) {
