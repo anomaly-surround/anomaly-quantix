@@ -1078,6 +1078,7 @@ function importExcel(arrayBuffer) {
   renderSheetTabs();
   renderSheet();
   selectCell(0, 0);
+  autoOrganize(0);
   triggerAutoSave();
 }
 
@@ -1159,6 +1160,7 @@ function importCSV(text) {
   renderSheetTabs();
   renderSheet();
   selectCell(0, 0);
+  autoOrganize(0);
 }
 
 function parseCSVLine(line) {
@@ -1572,6 +1574,195 @@ function flat(arr) {
     else result.push(item);
   }
   return result;
+}
+
+// ============================================
+// Smart Auto-Organize
+// ============================================
+
+function autoOrganize(sheetIdx) {
+  const sheet = sheets[sheetIdx ?? activeSheet];
+  const changes = [];
+
+  // Find data bounds
+  let maxR = 0, maxC = 0;
+  for (const key of Object.keys(sheet.cells)) {
+    const { row, col } = parseKey(key);
+    maxR = Math.max(maxR, row);
+    maxC = Math.max(maxC, col);
+  }
+  if (maxR === 0 && maxC === 0 && Object.keys(sheet.cells).length === 0) return;
+
+  // Analyze each column
+  const colAnalysis = [];
+  for (let c = 0; c <= maxC; c++) {
+    const types = { number: 0, currency: 0, percent: 0, date: 0, text: 0, empty: 0 };
+    const values = [];
+    let hasHeader = false;
+
+    for (let r = 0; r <= maxR; r++) {
+      const cell = sheet.cells[cellKey(r, c)];
+      if (!cell || cell.value === '' || cell.value === undefined) {
+        types.empty++;
+        continue;
+      }
+
+      const val = cell.value;
+      const detected = cell.detectedType || (typeof val === 'number' ? 'number' : 'text');
+      types[detected] = (types[detected] || 0) + 1;
+      values.push({ row: r, value: val, type: detected });
+
+      // First row is likely a header if it's text and the rest are numbers
+      if (r === 0 && typeof val === 'string' && isNaN(+val)) hasHeader = true;
+    }
+
+    const dominant = Object.entries(types)
+      .filter(([k]) => k !== 'empty')
+      .sort((a, b) => b[1] - a[1])[0];
+
+    colAnalysis.push({
+      col: c,
+      types,
+      dominant: dominant ? dominant[0] : 'text',
+      count: values.length,
+      hasHeader,
+      values
+    });
+  }
+
+  // 1. Auto-detect and style headers (row 0)
+  const headerRow = detectHeaderRow(sheet, maxC, colAnalysis);
+  if (headerRow !== null) {
+    for (let c = 0; c <= maxC; c++) {
+      const key = cellKey(headerRow, c);
+      if (sheet.cells[key]) {
+        sheet.cells[key].bold = true;
+        sheet.cells[key].fillColor = '#2a2a5a';
+        changes.push('Styled header row');
+      }
+    }
+  }
+
+  // 2. Auto-format columns by detected type
+  const startRow = headerRow !== null ? headerRow + 1 : 0;
+  for (const col of colAnalysis) {
+    for (let r = startRow; r <= maxR; r++) {
+      const key = cellKey(r, col.col);
+      const cell = sheet.cells[key];
+      if (!cell || cell.value === '' || cell.value === undefined) continue;
+
+      // Auto-align: numbers right, text left
+      if (col.dominant === 'number' || col.dominant === 'currency' || col.dominant === 'percent') {
+        cell.align = 'right';
+        // Try to parse text that looks like numbers
+        if (typeof cell.value === 'string' && !isNaN(+cell.value.replace(/[,$%]/g, ''))) {
+          const parsed = autoDetect(cell.value);
+          cell.value = parsed.value;
+          cell.detectedType = parsed.type;
+        }
+      }
+
+      if (col.dominant === 'currency' && !cell.detectedType) {
+        cell.detectedType = 'currency';
+      }
+      if (col.dominant === 'percent' && !cell.detectedType) {
+        cell.detectedType = 'percent';
+      }
+      if (col.dominant === 'date') {
+        cell.detectedType = 'date';
+      }
+    }
+    if (col.dominant !== 'text') {
+      changes.push(`Column ${COL_LETTERS[col.col]}: formatted as ${col.dominant}`);
+    }
+  }
+
+  // 3. Auto-fit column widths based on content
+  for (let c = 0; c <= maxC; c++) {
+    let maxLen = 0;
+    for (let r = 0; r <= maxR; r++) {
+      const cell = sheet.cells[cellKey(r, c)];
+      if (cell && cell.value !== undefined) {
+        const display = getDisplayValue(cell);
+        maxLen = Math.max(maxLen, display.length);
+      }
+    }
+    if (maxLen > 0) {
+      sheet.colWidths[c] = Math.min(250, Math.max(60, maxLen * 8.5 + 20));
+    }
+  }
+  changes.push('Auto-fitted column widths');
+
+  // 4. Add SUM row if numeric columns detected
+  const numericCols = colAnalysis.filter(c => (c.dominant === 'number' || c.dominant === 'currency') && c.count >= 3);
+  if (numericCols.length > 0 && headerRow !== null) {
+    const sumRow = maxR + 2; // Leave a gap
+    // Label
+    const labelKey = cellKey(sumRow, 0);
+    if (!sheet.cells[labelKey]) {
+      sheet.cells[labelKey] = { value: 'Total', bold: true, fillColor: '#1f3a2a' };
+    }
+    for (const col of numericCols) {
+      if (col.col === 0) continue;
+      const sumKey = cellKey(sumRow, col.col);
+      if (!sheet.cells[sumKey]) {
+        const colLetter = COL_LETTERS[col.col];
+        const formula = `=SUM(${colLetter}${startRow + 1}:${colLetter}${maxR + 1})`;
+        sheet.cells[sumKey] = {
+          formula,
+          value: evaluateFormula(formula, sheetIdx ?? activeSheet),
+          bold: true,
+          fillColor: '#1f3a2a',
+          detectedType: col.dominant
+        };
+      }
+    }
+    changes.push('Added totals row');
+  }
+
+  // 5. Zebra-stripe rows for readability
+  for (let r = startRow; r <= maxR; r++) {
+    if ((r - startRow) % 2 === 1) {
+      for (let c = 0; c <= maxC; c++) {
+        const key = cellKey(r, c);
+        if (sheet.cells[key] && !sheet.cells[key].fillColor) {
+          sheet.cells[key].fillColor = '#15152e';
+        }
+      }
+    }
+  }
+  changes.push('Added zebra striping');
+
+  renderSheet();
+  selectCell(0, 0);
+  triggerAutoSave();
+
+  // Show summary
+  const unique = [...new Set(changes)];
+  document.getElementById('status-info').textContent = 'Auto-organized: ' + unique.slice(0, 3).join(', ');
+  return unique;
+}
+
+function detectHeaderRow(sheet, maxC, colAnalysis) {
+  // Check if row 0 looks like headers
+  let textCount = 0;
+  let hasContent = false;
+  for (let c = 0; c <= maxC; c++) {
+    const cell = sheet.cells[cellKey(0, c)];
+    if (!cell || cell.value === '' || cell.value === undefined) continue;
+    hasContent = true;
+    if (typeof cell.value === 'string' && isNaN(+cell.value)) textCount++;
+  }
+  // If most of row 0 is text and columns below have different types, it's a header
+  if (hasContent && textCount >= Math.ceil((maxC + 1) * 0.5)) {
+    const hasNumericBelow = colAnalysis.some(c => c.dominant === 'number' || c.dominant === 'currency');
+    if (hasNumericBelow || textCount >= maxC) return 0;
+  }
+  return null;
+}
+
+function showAutoOrganizeToast(changes) {
+  if (!changes || changes.length === 0) return;
 }
 
 // ============================================
