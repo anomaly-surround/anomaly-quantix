@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anomaly Quantix</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="brand">
+        <span class="logo">Q</span>
+        <span class="brand-name">Anomaly Quantix</span>
+      </div>
+      <div class="file-controls">
+        <input type="text" id="file-name" value="Untitled Spreadsheet" spellcheck="false">
+        <div class="file-buttons">
+          <button onclick="saveFile()" title="Save (Ctrl+S)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg> Save</button>
+          <button onclick="document.getElementById('load-input').click()" title="Open (Ctrl+O)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg> Open</button>
+          <input type="file" id="load-input" accept=".qx,.csv" style="display:none" onchange="loadFile(event)">
+          <button onclick="exportCSV()" title="Export CSV"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export</button>
+          <button onclick="showTemplates()" title="Templates"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> Templates</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="toolbar-group">
+        <button onclick="toggleBold()" id="btn-bold" title="Bold (Ctrl+B)"><b>B</b></button>
+        <button onclick="toggleItalic()" id="btn-italic" title="Italic (Ctrl+I)"><i>I</i></button>
+        <button onclick="toggleUnderline()" id="btn-underline" title="Underline (Ctrl+U)"><u>U</u></button>
+      </div>
+      <div class="toolbar-divider"></div>
+      <div class="toolbar-group">
+        <button onclick="setAlign('left')" id="btn-align-left" title="Align Left" class="active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg></button>
+        <button onclick="setAlign('center')" id="btn-align-center" title="Align Center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
+        <button onclick="setAlign('right')" id="btn-align-right" title="Align Right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg></button>
+      </div>
+      <div class="toolbar-divider"></div>
+      <div class="toolbar-group">
+        <label title="Text Color" class="color-picker-label">A<input type="color" id="text-color" value="#ffffff" onchange="setTextColor(this.value)"><span class="color-bar" id="text-color-bar" style="background:#ffffff"></span></label>
+        <label title="Fill Color" class="color-picker-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="20" height="20" rx="2"/></svg><input type="color" id="fill-color" value="#1a1a2e" onchange="setFillColor(this.value)"><span class="color-bar" id="fill-color-bar" style="background:#1a1a2e"></span></label>
+      </div>
+      <div class="toolbar-divider"></div>
+      <div class="toolbar-group">
+        <select id="format-type" onchange="setFormatType(this.value)" title="Cell Format">
+          <option value="auto">Auto</option>
+          <option value="text">Text</option>
+          <option value="number">Number</option>
+          <option value="currency">Currency ($)</option>
+          <option value="percent">Percent (%)</option>
+          <option value="date">Date</option>
+        </select>
+      </div>
+      <div class="toolbar-divider"></div>
+      <div class="toolbar-group">
+        <button onclick="insertChart()" title="Insert Chart"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="13" width="4" height="8"/><rect x="10" y="8" width="4" height="13"/><rect x="18" y="3" width="4" height="18"/></svg> Chart</button>
+      </div>
+      <div class="toolbar-group" style="margin-left:auto">
+        <button onclick="undo()" title="Undo (Ctrl+Z)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1,4 1,10 7,10"/><path d="M3.51 15a9 9 0 105.26-11.49L1 10"/></svg></button>
+        <button onclick="redo()" title="Redo (Ctrl+Y)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 11-5.26-11.49L23 10"/></svg></button>
+      </div>
+    </div>
+
+    <!-- Formula Bar -->
+    <div class="formula-bar">
+      <div class="cell-ref" id="cell-ref">A1</div>
+      <div class="formula-icon">fx</div>
+      <input type="text" id="formula-input" spellcheck="false" placeholder="Enter a value or formula (e.g. =SUM(A1:A10))">
+    </div>
+
+    <!-- Sheet -->
+    <div class="sheet-container" id="sheet-container">
+      <table id="sheet">
+        <thead id="sheet-head"></thead>
+        <tbody id="sheet-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Sheet Tabs -->
+    <div class="sheet-tabs">
+      <div class="tabs-list" id="tabs-list"></div>
+      <button class="add-sheet-btn" onclick="addSheet()" title="Add Sheet">+</button>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="status-left">
+        <span id="status-info">Ready</span>
+      </div>
+      <div class="status-right">
+        <span id="status-sum" title="Quick stats for selection"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Templates Modal -->
+  <div class="modal-overlay" id="templates-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Templates</h2>
+        <button onclick="document.getElementById('templates-modal').style.display='none'">&times;</button>
+      </div>
+      <div class="modal-body templates-grid" id="templates-grid"></div>
+    </div>
+  </div>
+
+  <!-- Chart Modal -->
+  <div class="modal-overlay" id="chart-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>Insert Chart</h2>
+        <button onclick="document.getElementById('chart-modal').style.display='none'">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="chart-options">
+          <label>Chart Type:
+            <select id="chart-type">
+              <option value="bar">Bar</option>
+              <option value="line">Line</option>
+              <option value="pie">Pie</option>
+            </select>
+          </label>
+          <label>Data Range:
+            <input type="text" id="chart-range" placeholder="e.g. A1:B5">
+          </label>
+          <label>Title:
+            <input type="text" id="chart-title" placeholder="Chart Title">
+          </label>
+          <button class="btn-primary" onclick="createChart()">Create Chart</button>
+        </div>
+        <canvas id="chart-canvas" width="600" height="350"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
