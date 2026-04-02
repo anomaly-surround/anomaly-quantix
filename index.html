@@ -60,6 +60,11 @@
       </div>
       <div class="toolbar-divider"></div>
       <div class="toolbar-group">
+        <button onclick="mergeCells()" title="Merge Cells"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg></button>
+        <button onclick="unmergeCells()" title="Unmerge Cells"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="3,3"/></svg></button>
+      </div>
+      <div class="toolbar-divider"></div>
+      <div class="toolbar-group">
         <button onclick="autoOrganize()" title="Auto-organize data"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.27 5.82 22 7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Smart Format</button>
         <button onclick="insertChart()" title="Insert Chart"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="13" width="4" height="8"/><rect x="10" y="8" width="4" height="13"/><rect x="18" y="3" width="4" height="18"/></svg> Chart</button>
       </div>
@@ -101,6 +106,102 @@
     </div>
   </div>
 
+  <!-- Conditional Format Modal -->
+  <div class="modal-overlay" id="cond-format-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Conditional Formatting</h2>
+        <button onclick="document.getElementById('cond-format-modal').style.display='none'">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="cond-form">
+          <label>When cell value:
+            <select id="cond-rule-type">
+              <option value="greater">Greater than</option>
+              <option value="less">Less than</option>
+              <option value="equal">Equal to</option>
+              <option value="not_equal">Not equal to</option>
+              <option value="between">Between</option>
+              <option value="contains">Text contains</option>
+              <option value="empty">Is empty</option>
+              <option value="not_empty">Is not empty</option>
+            </select>
+          </label>
+          <label>Value:
+            <input type="text" id="cond-value1" placeholder="Value">
+          </label>
+          <label id="cond-value2-label" style="display:none">And:
+            <input type="text" id="cond-value2" placeholder="Value 2">
+          </label>
+          <label>Highlight color:
+            <div class="cond-colors">
+              <button class="cond-color-btn" style="background:#ff6b6b" onclick="selectCondColor('#ff6b6b', this)" data-color="#ff6b6b">Red</button>
+              <button class="cond-color-btn" style="background:#fdcb6e;color:#333" onclick="selectCondColor('#fdcb6e', this)" data-color="#fdcb6e">Yellow</button>
+              <button class="cond-color-btn" style="background:#00cec9" onclick="selectCondColor('#00cec9', this)" data-color="#00cec9">Green</button>
+              <button class="cond-color-btn" style="background:#6c5ce7" onclick="selectCondColor('#6c5ce7', this)" data-color="#6c5ce7">Purple</button>
+              <button class="cond-color-btn" style="background:#74b9ff" onclick="selectCondColor('#74b9ff', this)" data-color="#74b9ff">Blue</button>
+            </div>
+          </label>
+          <div class="cond-actions">
+            <button class="btn-primary" onclick="applyConditionalFormat()">Apply</button>
+            <button onclick="clearConditionalFormats()">Clear Rules</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data Validation Modal -->
+  <div class="modal-overlay" id="validation-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Data Validation</h2>
+        <button onclick="document.getElementById('validation-modal').style.display='none'">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="cond-form">
+          <label>Type:
+            <select id="validation-type" onchange="updateValidationUI()">
+              <option value="list">Dropdown List</option>
+              <option value="number">Number Range</option>
+              <option value="text_length">Text Length</option>
+            </select>
+          </label>
+          <div id="validation-list-opts">
+            <label>Options (comma-separated):
+              <input type="text" id="validation-list" placeholder="Option 1, Option 2, Option 3">
+            </label>
+          </div>
+          <div id="validation-range-opts" style="display:none">
+            <label>Min: <input type="number" id="validation-min" placeholder="Min"></label>
+            <label>Max: <input type="number" id="validation-max" placeholder="Max"></label>
+          </div>
+          <div class="cond-actions">
+            <button class="btn-primary" onclick="applyValidation()">Apply</button>
+            <button onclick="clearValidation()">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Find & Replace Modal -->
+  <div class="find-replace-bar" id="find-replace-bar" style="display:none">
+    <div class="find-row">
+      <input type="text" id="find-input" placeholder="Find..." spellcheck="false">
+      <span id="find-count" class="find-count"></span>
+      <button onclick="findPrev()" title="Previous">&uarr;</button>
+      <button onclick="findNext()" title="Next">&darr;</button>
+      <button onclick="toggleReplace()" title="Replace" id="btn-toggle-replace">Replace</button>
+      <button onclick="closeFindBar()">&times;</button>
+    </div>
+    <div class="replace-row" id="replace-row" style="display:none">
+      <input type="text" id="replace-input" placeholder="Replace with..." spellcheck="false">
+      <button onclick="replaceCurrent()">Replace</button>
+      <button onclick="replaceAll()">Replace All</button>
+    </div>
+  </div>
+
   <!-- Shortcuts Modal -->
   <div class="modal-overlay" id="shortcuts-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
     <div class="modal modal-lg">
@@ -131,6 +232,8 @@
           <h3>File</h3>
           <div class="shortcut-row"><kbd>Ctrl + S</kbd><span>Save file</span></div>
           <div class="shortcut-row"><kbd>Ctrl + O</kbd><span>Open file</span></div>
+          <div class="shortcut-row"><kbd>Ctrl + F</kbd><span>Find</span></div>
+          <div class="shortcut-row"><kbd>Ctrl + H</kbd><span>Find & Replace</span></div>
         </div>
         <div class="shortcut-section">
           <h3>Editing</h3>
