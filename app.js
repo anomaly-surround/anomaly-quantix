@@ -954,27 +954,159 @@ function saveFile() {
 function loadFile(event) {
   const file = event.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      if (file.name.endsWith('.csv')) {
-        importCSV(e.target.result);
-      } else {
-        const data = JSON.parse(e.target.result);
-        sheets = data.sheets;
-        activeSheet = data.activeSheet || 0;
-        document.getElementById('file-name').value = data.fileName || file.name.replace('.qx', '');
-        renderSheetTabs();
-        renderSheet();
-        selectCell(0, 0);
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  if (ext === 'xlsx' || ext === 'xls') {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        importExcel(e.target.result);
+        document.getElementById('file-name').value = file.name.replace(/\.(xlsx|xls)$/, '');
+        document.getElementById('status-info').textContent = 'Loaded: ' + file.name;
+      } catch (err) {
+        alert('Failed to load Excel file: ' + err.message);
       }
-      document.getElementById('status-info').textContent = 'Loaded: ' + file.name;
-    } catch (err) {
-      alert('Failed to load file: ' + err.message);
-    }
-  };
-  reader.readAsText(file);
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        if (ext === 'csv') {
+          importCSV(e.target.result);
+        } else {
+          const data = JSON.parse(e.target.result);
+          sheets = data.sheets;
+          activeSheet = data.activeSheet || 0;
+          document.getElementById('file-name').value = data.fileName || file.name.replace('.qx', '');
+          renderSheetTabs();
+          renderSheet();
+          selectCell(0, 0);
+        }
+        document.getElementById('status-info').textContent = 'Loaded: ' + file.name;
+      } catch (err) {
+        alert('Failed to load file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  }
   event.target.value = '';
+}
+
+function importExcel(arrayBuffer) {
+  const workbook = XLSX.read(arrayBuffer, { type: 'array', cellStyles: true, cellFormula: true });
+
+  sheets = workbook.SheetNames.map(name => {
+    const ws = workbook.Sheets[name];
+    const sheetData = createSheetData(name);
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+
+    // Import column widths
+    if (ws['!cols']) {
+      ws['!cols'].forEach((col, i) => {
+        if (col && col.wpx) sheetData.colWidths[i] = Math.max(40, col.wpx);
+        else if (col && col.wch) sheetData.colWidths[i] = Math.max(40, col.wch * 8);
+      });
+    }
+
+    for (let r = range.s.r; r <= Math.min(range.e.r, ROWS - 1); r++) {
+      for (let c = range.s.c; c <= Math.min(range.e.c, COLS - 1); c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const wsCell = ws[addr];
+        if (!wsCell) continue;
+
+        const key = cellKey(r, c);
+        const cell = {};
+
+        // Value
+        if (wsCell.f) {
+          cell.formula = '=' + wsCell.f;
+          cell.value = wsCell.v ?? '';
+        } else if (wsCell.t === 'n') {
+          cell.value = wsCell.v;
+          cell.detectedType = 'number';
+        } else if (wsCell.t === 'd') {
+          cell.value = wsCell.w || String(wsCell.v);
+          cell.detectedType = 'date';
+        } else {
+          cell.value = wsCell.v ?? '';
+          cell.detectedType = 'text';
+        }
+
+        // Number format detection
+        if (wsCell.z) {
+          if (wsCell.z.includes('$') || wsCell.z.includes('€') || wsCell.z.includes('£')) {
+            cell.detectedType = 'currency';
+          } else if (wsCell.z.includes('%')) {
+            cell.detectedType = 'percent';
+            if (typeof cell.value === 'number' && cell.value <= 1) {
+              // Already in decimal form, keep as-is for percent display
+            }
+          } else if (wsCell.z.includes('d') || wsCell.z.includes('m') || wsCell.z.includes('y')) {
+            cell.detectedType = 'date';
+            if (wsCell.w) cell.value = wsCell.w;
+          }
+        }
+
+        // Style extraction
+        if (wsCell.s) {
+          if (wsCell.s.font) {
+            if (wsCell.s.font.bold) cell.bold = true;
+            if (wsCell.s.font.italic) cell.italic = true;
+            if (wsCell.s.font.underline) cell.underline = true;
+            if (wsCell.s.font.color && wsCell.s.font.color.rgb) {
+              cell.textColor = '#' + wsCell.s.font.color.rgb.slice(-6);
+            }
+          }
+          if (wsCell.s.fill && wsCell.s.fill.fgColor && wsCell.s.fill.fgColor.rgb) {
+            const fill = '#' + wsCell.s.fill.fgColor.rgb.slice(-6);
+            if (fill !== '#000000') cell.fillColor = fill;
+          }
+          if (wsCell.s.alignment) {
+            if (wsCell.s.alignment.horizontal) cell.align = wsCell.s.alignment.horizontal;
+          }
+        }
+
+        sheetData.cells[key] = cell;
+      }
+    }
+
+    return sheetData;
+  });
+
+  activeSheet = 0;
+  renderSheetTabs();
+  renderSheet();
+  selectCell(0, 0);
+  triggerAutoSave();
+}
+
+function exportExcel() {
+  const wb = XLSX.utils.book_new();
+  sheets.forEach(sheet => {
+    let maxR = 0, maxC = 0;
+    for (const key of Object.keys(sheet.cells)) {
+      const { row, col } = parseKey(key);
+      maxR = Math.max(maxR, row);
+      maxC = Math.max(maxC, col);
+    }
+
+    const data = [];
+    for (let r = 0; r <= maxR; r++) {
+      const row = [];
+      for (let c = 0; c <= maxC; c++) {
+        const cell = sheet.cells[cellKey(r, c)];
+        row.push(cell ? (cell.value ?? '') : '');
+      }
+      data.push(row);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, sheet.name);
+  });
+
+  const fileName = (document.getElementById('file-name').value || 'spreadsheet') + '.xlsx';
+  XLSX.writeFile(wb, fileName);
 }
 
 function exportCSV() {
