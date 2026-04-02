@@ -1011,10 +1011,10 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Home') { e.preventDefault(); selectCell(selectedCell.row, 0); }
   else if (e.key === 'End') { e.preventDefault(); selectCell(selectedCell.row, COLS - 1); }
   else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-    // Start typing directly
+    // Start typing directly - let the keystroke naturally go into the input
     startEdit(selectedCell.row, selectedCell.col);
     const input = getCellTd(selectedCell.row, selectedCell.col)?.querySelector('input');
-    if (input) { input.value = e.key; }
+    if (input) { input.value = ''; }
   }
 });
 
