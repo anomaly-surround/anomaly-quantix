@@ -1,7 +1,9 @@
 // Anomaly Quantix - Pro License Worker
 // Cloudflare Worker with KV storage
 // KV Binding: QUANTIX_PRO
-// Environment Variables: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, WORKER_URL
+// Environment Variables: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, WORKER_URL, APP_URL
+
+const ALLOWED_ORIGIN = 'https://anomaly-surround.github.io';
 
 export default {
   async fetch(request, env) {
@@ -62,7 +64,9 @@ function handleGoogleRedirect(env) {
 // Google OAuth: handle callback, exchange code for token, get user info
 async function handleGoogleCallback(url, env) {
   const code = url.searchParams.get('code');
-  if (!code) return json({ error: 'No code' }, 400);
+  const appUrl = env.APP_URL || ALLOWED_ORIGIN + '/anomaly-quantix';
+
+  if (!code) return Response.redirect(appUrl + '?error=no_code', 302);
 
   // Exchange code for tokens
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -79,7 +83,7 @@ async function handleGoogleCallback(url, env) {
 
   const tokens = await tokenRes.json();
   if (!tokens.access_token) {
-    return redirectToApp(env, null, 'Google login failed');
+    return Response.redirect(appUrl + '?error=login_failed', 302);
   }
 
   // Get user info
@@ -89,33 +93,21 @@ async function handleGoogleCallback(url, env) {
 
   const user = await userRes.json();
   if (!user.email) {
-    return redirectToApp(env, null, 'Could not get email');
+    return Response.redirect(appUrl + '?error=no_email', 302);
   }
 
-  // Generate a simple session token
+  // Generate a session token
   const sessionToken = crypto.randomUUID();
 
-  // Store session: token -> { email, name, picture }
+  // Store session with 30-day expiry
   await env.QUANTIX_PRO.put('session:' + sessionToken, JSON.stringify({
     email: user.email,
     name: user.name || '',
     picture: user.picture || ''
-  }), { expirationTtl: 60 * 60 * 24 * 365 }); // 1 year
+  }), { expirationTtl: 60 * 60 * 24 * 30 });
 
-  // Check if user has pro
-  const proData = await env.QUANTIX_PRO.get('pro:' + user.email);
-
-  // Redirect back to app with token
-  return redirectToApp(env, sessionToken, null, proData ? true : false);
-}
-
-function redirectToApp(env, token, error, isPro) {
-  const appUrl = env.APP_URL || 'https://anomaly-surround.github.io/anomaly-quantix';
-  const params = new URLSearchParams();
-  if (token) params.set('token', token);
-  if (error) params.set('error', error);
-  if (isPro) params.set('pro', '1');
-  return Response.redirect(appUrl + '?' + params.toString(), 302);
+  // Redirect back to app with token only (pro status fetched via /api/status)
+  return Response.redirect(appUrl + '?token=' + sessionToken, 302);
 }
 
 // Check pro status
@@ -137,7 +129,7 @@ async function handleStatus(request, env) {
   });
 }
 
-// Activate license key and tie to Google account
+// Activate license key — validate with LemonSqueezy first
 async function handleActivate(request, env) {
   const token = getToken(request);
   if (!token) return json({ error: 'Not authenticated' }, 401);
@@ -149,16 +141,48 @@ async function handleActivate(request, env) {
   const key = body.key?.trim();
   if (!key || key.length < 6) return json({ error: 'Invalid license key' }, 400);
 
+  // Check if key is already used by someone else
+  const existingUser = await env.QUANTIX_PRO.get('key:' + key);
+  if (existingUser && existingUser !== session.email) {
+    return json({ error: 'This license key is already in use' }, 400);
+  }
+
+  // Validate with LemonSqueezy API
+  const valid = await validateWithLemonSqueezy(key);
+  if (!valid) {
+    return json({ error: 'Invalid or expired license key' }, 400);
+  }
+
   // Store pro status
   await env.QUANTIX_PRO.put('pro:' + session.email, JSON.stringify({
     key,
     activatedAt: Date.now()
   }));
 
-  // Also store key -> email mapping (to prevent reuse if needed later)
+  // Store key -> email mapping
   await env.QUANTIX_PRO.put('key:' + key, session.email);
 
   return json({ success: true, pro: true });
+}
+
+// Validate license key with LemonSqueezy
+async function validateWithLemonSqueezy(key) {
+  try {
+    const res = await fetch('https://api.lemonsqueezy.com/v1/licenses/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+      body: 'license_key=' + encodeURIComponent(key)
+    });
+
+    const data = await res.json();
+    // Valid if the key exists and is active
+    if (data.valid) return true;
+    if (data.license_key && data.license_key.status === 'active') return true;
+    return false;
+  } catch {
+    // If LemonSqueezy is unreachable, deny activation (fail closed)
+    return false;
+  }
 }
 
 // Deactivate
@@ -187,6 +211,7 @@ function getToken(request) {
 }
 
 async function getSession(token, env) {
+  if (!token || token.length < 10) return null;
   const data = await env.QUANTIX_PRO.get('session:' + token);
   return data ? JSON.parse(data) : null;
 }
@@ -200,7 +225,7 @@ function json(data, status = 200) {
 
 function corsHeaders() {
   return {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization'
   };

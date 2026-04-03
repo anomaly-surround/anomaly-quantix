@@ -1061,7 +1061,7 @@ const FORMULA_FUNCS = {
   DATE: (a) => new Date(toNum(a[0]), toNum(a[1])-1, toNum(a[2])).toLocaleDateString(),
   WEEKDAY: (a) => new Date(a[0]).getDay() + 1,
   WEEKNUM: (a) => { const d = new Date(a[0]); const s = new Date(d.getFullYear(),0,1); return Math.ceil(((d-s)/86400000+s.getDay()+1)/7); },
-  NETWORKDAYS: (a) => { const s = new Date(a[0]); const e = new Date(a[1]); if (isNaN(s) || isNaN(e)) return '#VALUE'; const days = Math.round((e - s) / 86400000); if (Math.abs(days) > 36600) return '#VALUE'; let c = 0; const d = new Date(s); while(d<=e){const dy=d.getDay(); if(dy!==0&&dy!==6) c++; d.setDate(d.getDate()+1);} return c; },
+  NETWORKDAYS: (a) => { const s = new Date(a[0]); const e = new Date(a[1]); if (isNaN(s) || isNaN(e)) return '#VALUE'; const days = Math.round((e - s) / 86400000); if (Math.abs(days) > 3660) return '#VALUE'; let c = 0; const d = new Date(s); while(d<=e){const dy=d.getDay(); if(dy!==0&&dy!==6) c++; d.setDate(d.getDate()+1);} return c; },
   DATEDIF: (a) => { const s = new Date(a[0]); const e = new Date(a[1]); const u = String(a[2]).toUpperCase(); if(u==='D') return Math.round((e-s)/86400000); if(u==='M') return (e.getFullYear()-s.getFullYear())*12+e.getMonth()-s.getMonth(); if(u==='Y') return e.getFullYear()-s.getFullYear(); return '#VALUE'; },
 
   // Financial
@@ -2883,7 +2883,7 @@ function sanitizeSheetData(sheet) {
     const allowed = ['value', 'formula', 'bold', 'italic', 'underline', 'textColor', 'fillColor', 'align', 'detectedType', 'formatType', 'validation', 'merge', '_mergedInto', '_condColor', 'comment', 'deadline'];
     for (const [key, cell] of Object.entries(sheet.cells)) {
       if (!cell || typeof cell !== 'object') continue;
-      if (!/^\d+,\d+$/.test(key)) continue;
+      if (!/^\d+_\d+$/.test(key)) continue;
       const c = {};
       for (const prop of allowed) {
         if (cell[prop] !== undefined) {
@@ -4392,47 +4392,36 @@ function tryActivateKey(key, errorEl, onSuccess) {
   }
 
   const token = getAuthToken();
-  if (token) {
-    // Activate via worker (ties key to Google account)
-    fetch(WORKER_URL + '/api/activate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ key })
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.success) {
-        const proData = getProData() || {};
-        proData.pro = true;
-        proData.key = key;
-        localStorage.setItem('quantix-pro', JSON.stringify(proData));
-        updateProUI();
-        document.getElementById('status-info').textContent = 'Pro activated! Thank you!';
-        if (onSuccess) onSuccess();
-      } else {
-        errorEl.style.color = 'var(--danger)';
-        errorEl.textContent = data.error || 'Activation failed.';
-      }
-    })
-    .catch(() => {
-      // Worker unreachable, activate locally
-      activateLocally(key, onSuccess);
-    });
-  } else {
-    // No Google login, activate locally
-    activateLocally(key, onSuccess);
+  if (!token) {
+    errorEl.style.color = 'var(--danger)';
+    errorEl.textContent = 'Please sign in with Google first.';
+    return;
   }
-}
 
-function activateLocally(key, onSuccess) {
-  const proData = getProData() || {};
-  proData.pro = true;
-  proData.key = key;
-  proData.activatedAt = Date.now();
-  localStorage.setItem('quantix-pro', JSON.stringify(proData));
-  updateProUI();
-  document.getElementById('status-info').textContent = 'Pro activated! Sign in with Google to sync across devices.';
-  if (onSuccess) onSuccess();
+  fetch(WORKER_URL + '/api/activate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ key })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      const proData = getProData() || {};
+      proData.pro = true;
+      proData.key = key;
+      localStorage.setItem('quantix-pro', JSON.stringify(proData));
+      updateProUI();
+      document.getElementById('status-info').textContent = 'Pro activated! Thank you!';
+      if (onSuccess) onSuccess();
+    } else {
+      errorEl.style.color = 'var(--danger)';
+      errorEl.textContent = data.error || 'Activation failed.';
+    }
+  })
+  .catch(() => {
+    errorEl.style.color = 'var(--danger)';
+    errorEl.textContent = 'Could not connect to server. Try again later.';
+  });
 }
 
 function deactivatePro() {
@@ -4457,7 +4446,6 @@ function handleAuthCallback() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('token');
   const error = params.get('error');
-  const isPro = params.get('pro');
 
   if (!token && !error) return;
 
@@ -4499,12 +4487,6 @@ function handleAuthCallback() {
     });
   }
 
-  if (isPro === '1') {
-    const proData = getProData() || {};
-    proData.pro = true;
-    localStorage.setItem('quantix-pro', JSON.stringify(proData));
-    updateProUI();
-  }
 }
 
 // Check pro status on load if token exists
