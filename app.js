@@ -18,6 +18,7 @@ let undoStack = [];
 let redoStack = [];
 let clipboardData = null;
 let resizingCol = null;
+let multiSelection = []; // [{row, col}, ...] for Ctrl+Click
 
 // ============================================
 // Initialization
@@ -244,13 +245,26 @@ function attachCellEvents() {
       return;
     }
 
-    if (e.shiftKey) {
+    if (e.ctrlKey || e.metaKey) {
+      // Ctrl+Click: add/remove cell from multi-selection
+      const idx = multiSelection.findIndex(s => s.row === row && s.col === col);
+      if (idx >= 0) {
+        multiSelection.splice(idx, 1);
+      } else {
+        multiSelection.push({ row, col });
+      }
+      selectedCell = { row, col };
+      selectionRange = null;
+      highlightMultiSelection();
+    } else if (e.shiftKey) {
+      multiSelection = [];
       selectionRange = {
         startRow: selectedCell.row, startCol: selectedCell.col,
         endRow: row, endCol: col
       };
       highlightRange();
     } else {
+      multiSelection = [];
       selectCell(row, col);
       isSelecting = true;
       selectionRange = { startRow: row, startCol: col, endRow: row, endCol: col };
@@ -469,6 +483,27 @@ function highlightRange() {
       if (td) td.classList.add(r === selectedCell.row && c === selectedCell.col ? 'selected' : 'in-range');
     }
   }
+}
+
+function highlightMultiSelection() {
+  document.querySelectorAll('td.in-range').forEach(td => td.classList.remove('in-range'));
+  document.querySelectorAll('td.selected').forEach(td => td.classList.remove('selected'));
+
+  multiSelection.forEach(({ row, col }) => {
+    const td = getCellTd(row, col);
+    if (td) td.classList.add('in-range');
+  });
+
+  // Update cell ref and formula bar for last selected
+  if (multiSelection.length > 0) {
+    const last = multiSelection[multiSelection.length - 1];
+    document.getElementById('cell-ref').textContent = COL_LETTERS[last.col] + (last.row + 1);
+    const key = cellKey(last.row, last.col);
+    const cell = sheets[activeSheet].cells[key] || {};
+    document.getElementById('formula-input').value = cell.formula || cell.value || '';
+  }
+
+  updateStatusBar();
 }
 
 function selectRow(row) {
@@ -1428,30 +1463,36 @@ function showContextMenu(x, y, row, col) {
   // Check if we have a multi-cell selection to show quick formulas
   const hasRange = selectionRange &&
     (selectionRange.startRow !== selectionRange.endRow || selectionRange.startCol !== selectionRange.endCol);
+  const hasMulti = multiSelection.length >= 2;
 
-  const rangeRef = hasRange ? getRangeRef() : '';
+  let formulaRef = '';
+  if (hasMulti) {
+    formulaRef = multiSelection.map(s => COL_LETTERS[s.col] + (s.row + 1)).join(',');
+  } else if (hasRange) {
+    formulaRef = getRangeRef();
+  }
 
   let html = `
     <button onclick="cutSelection();removeContextMenu()">Cut</button>
     <button onclick="copySelection();removeContextMenu()">Copy</button>
     <button onclick="pasteSelection();removeContextMenu()">Paste</button>`;
 
-  if (hasRange) {
+  if (hasRange || hasMulti) {
     html += `
     <div class="separator"></div>
     <div class="context-submenu">
       <button class="submenu-trigger" onclick="toggleSubmenu(event)">Quick Formula &rarr;</button>
       <div class="submenu">
-        <button onclick="quickFormula('SUM','${rangeRef}');removeContextMenu()">SUM</button>
-        <button onclick="quickFormula('AVERAGE','${rangeRef}');removeContextMenu()">AVERAGE</button>
-        <button onclick="quickFormula('COUNT','${rangeRef}');removeContextMenu()">COUNT</button>
-        <button onclick="quickFormula('MIN','${rangeRef}');removeContextMenu()">MIN</button>
-        <button onclick="quickFormula('MAX','${rangeRef}');removeContextMenu()">MAX</button>
-        <button onclick="quickFormula('MEDIAN','${rangeRef}');removeContextMenu()">MEDIAN</button>
-        <button onclick="quickFormula('PRODUCT','${rangeRef}');removeContextMenu()">PRODUCT</button>
-        <button onclick="quickFormula('STDEV','${rangeRef}');removeContextMenu()">STDEV</button>
-        <button onclick="quickFormula('COUNTIF','${rangeRef}');removeContextMenu()">COUNTIF...</button>
-        <button onclick="quickFormula('SUMIF','${rangeRef}');removeContextMenu()">SUMIF...</button>
+        <button onclick="quickFormula('SUM','${formulaRef}');removeContextMenu()">SUM</button>
+        <button onclick="quickFormula('AVERAGE','${formulaRef}');removeContextMenu()">AVERAGE</button>
+        <button onclick="quickFormula('COUNT','${formulaRef}');removeContextMenu()">COUNT</button>
+        <button onclick="quickFormula('MIN','${formulaRef}');removeContextMenu()">MIN</button>
+        <button onclick="quickFormula('MAX','${formulaRef}');removeContextMenu()">MAX</button>
+        <button onclick="quickFormula('MEDIAN','${formulaRef}');removeContextMenu()">MEDIAN</button>
+        <button onclick="quickFormula('PRODUCT','${formulaRef}');removeContextMenu()">PRODUCT</button>
+        <button onclick="quickFormula('STDEV','${formulaRef}');removeContextMenu()">STDEV</button>
+        <button onclick="quickFormula('COUNTIF','${formulaRef}');removeContextMenu()">COUNTIF...</button>
+        <button onclick="quickFormula('SUMIF','${formulaRef}');removeContextMenu()">SUMIF...</button>
       </div>
     </div>`;
   }
@@ -2639,7 +2680,9 @@ function parseKey(key) { const [col, row] = key.split('_').map(Number); return {
 function getCellTd(row, col) { return document.querySelector(`td[data-row="${row}"][data-col="${col}"]`); }
 
 function forEachSelected(fn) {
-  if (selectionRange) {
+  if (multiSelection.length >= 2) {
+    multiSelection.forEach(s => fn(s.row, s.col));
+  } else if (selectionRange) {
     const r1 = Math.min(selectionRange.startRow, selectionRange.endRow);
     const r2 = Math.max(selectionRange.startRow, selectionRange.endRow);
     const c1 = Math.min(selectionRange.startCol, selectionRange.endCol);
