@@ -389,6 +389,72 @@ body {
   transition: outline 0.15s, background-color 0.15s;
 }
 
+/* Floating charts on sheet */
+.floating-chart {
+  position: absolute;
+  z-index: 10;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  width: 500px;
+}
+
+.floating-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  user-select: none;
+}
+
+.floating-chart-header:active { cursor: grabbing; }
+
+.floating-chart-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.floating-chart-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+.floating-chart-btn {
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.floating-chart-btn:hover { background: var(--bg-hover); color: var(--text); }
+
+.floating-chart-canvas { display: block; width: 100%; }
+
+.floating-chart-resize {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, var(--border-light) 50%);
+  border-radius: 0 0 10px 0;
+}
+
 /* Date picker popup */
 .date-picker-popup {
   position: fixed;
@@ -1079,6 +1145,9 @@ td.find-highlight .cell { outline: 2px solid var(--warning) !important; backgrou
 
   /* Date picker */
   .date-picker-popup { left: 10px !important; right: 10px; }
+
+  /* Floating charts */
+  .floating-chart { width: 90vw !important; }
 }
 
 @media (max-width: 400px) {

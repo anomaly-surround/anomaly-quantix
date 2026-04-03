@@ -2143,6 +2143,10 @@ function createChart() {
   }
 
   drawChart(ctx, canvas, type, title, labels, datasets);
+
+  // Place chart on the sheet
+  placeChartOnSheet(type, title, labels, datasets, rangeStr);
+  document.getElementById('chart-modal').style.display = 'none';
 }
 
 function drawChart(ctx, canvas, type, title, labels, datasets) {
@@ -2290,6 +2294,173 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.lineTo(x, y + h);
   ctx.lineTo(x, y + r);
   ctx.quadraticCurveTo(x, y, x + r, y);
+}
+
+// ============================================
+// Floating Charts on Sheet
+// ============================================
+
+let sheetCharts = [];
+
+function placeChartOnSheet(type, title, labels, datasets, rangeStr) {
+  const container = document.getElementById('sheet-container');
+  const id = 'chart-' + Date.now();
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'floating-chart';
+  wrapper.id = id;
+  wrapper.style.left = (container.scrollLeft + 60) + 'px';
+  wrapper.style.top = (container.scrollTop + 30) + 'px';
+
+  const header = document.createElement('div');
+  header.className = 'floating-chart-header';
+  header.innerHTML = `<span class="floating-chart-title">${escapeHTML(title)}</span>
+    <div class="floating-chart-actions">
+      <button class="floating-chart-btn" onclick="refreshSheetChart('${id}')" title="Refresh data">&#x21bb;</button>
+      <button class="floating-chart-btn" onclick="removeSheetChart('${id}')" title="Close">&times;</button>
+    </div>`;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 500;
+  canvas.height = 300;
+  canvas.className = 'floating-chart-canvas';
+
+  const resizeHandle = document.createElement('div');
+  resizeHandle.className = 'floating-chart-resize';
+
+  wrapper.appendChild(header);
+  wrapper.appendChild(canvas);
+  wrapper.appendChild(resizeHandle);
+  container.appendChild(wrapper);
+
+  const chartData = { id, type, title, labels, datasets, rangeStr, wrapper, canvas };
+  sheetCharts.push(chartData);
+
+  // Draw
+  const ctx = canvas.getContext('2d');
+  drawChart(ctx, canvas, type, title, labels, datasets);
+
+  // Dragging
+  let dragging = false, dragX, dragY, startLeft, startTop;
+  header.addEventListener('mousedown', (e) => {
+    dragging = true;
+    dragX = e.clientX;
+    dragY = e.clientY;
+    startLeft = wrapper.offsetLeft;
+    startTop = wrapper.offsetTop;
+    e.preventDefault();
+  });
+  header.addEventListener('touchstart', (e) => {
+    dragging = true;
+    dragX = e.touches[0].clientX;
+    dragY = e.touches[0].clientY;
+    startLeft = wrapper.offsetLeft;
+    startTop = wrapper.offsetTop;
+    e.preventDefault();
+  });
+
+  const onDragMove = (e) => {
+    if (!dragging) return;
+    const cx = e.clientX ?? e.touches?.[0]?.clientX;
+    const cy = e.clientY ?? e.touches?.[0]?.clientY;
+    wrapper.style.left = (startLeft + cx - dragX) + 'px';
+    wrapper.style.top = (startTop + cy - dragY) + 'px';
+  };
+  const onDragEnd = () => { dragging = false; };
+  document.addEventListener('mousemove', onDragMove);
+  document.addEventListener('mouseup', onDragEnd);
+  document.addEventListener('touchmove', onDragMove);
+  document.addEventListener('touchend', onDragEnd);
+
+  // Resizing
+  let resizing = false, resizeX, resizeY, startW, startH;
+  resizeHandle.addEventListener('mousedown', (e) => {
+    resizing = true;
+    resizeX = e.clientX;
+    resizeY = e.clientY;
+    startW = canvas.width;
+    startH = canvas.height;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  resizeHandle.addEventListener('touchstart', (e) => {
+    resizing = true;
+    resizeX = e.touches[0].clientX;
+    resizeY = e.touches[0].clientY;
+    startW = canvas.width;
+    startH = canvas.height;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  const onResizeMove = (e) => {
+    if (!resizing) return;
+    const cx = e.clientX ?? e.touches?.[0]?.clientX;
+    const cy = e.clientY ?? e.touches?.[0]?.clientY;
+    const newW = Math.max(250, startW + cx - resizeX);
+    const newH = Math.max(180, startH + cy - resizeY);
+    canvas.width = newW;
+    canvas.height = newH;
+    wrapper.style.width = newW + 'px';
+    drawChart(canvas.getContext('2d'), canvas, type, title, labels, datasets);
+  };
+  const onResizeEnd = () => { resizing = false; };
+  document.addEventListener('mousemove', onResizeMove);
+  document.addEventListener('mouseup', onResizeEnd);
+  document.addEventListener('touchmove', onResizeMove);
+  document.addEventListener('touchend', onResizeEnd);
+}
+
+function removeSheetChart(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+  sheetCharts = sheetCharts.filter(c => c.id !== id);
+}
+
+function refreshSheetChart(id) {
+  const chart = sheetCharts.find(c => c.id === id);
+  if (!chart) return;
+
+  // Re-read data from the range
+  const match = chart.rangeStr.match(/^([A-Z])(\d+):([A-Z])(\d+)$/);
+  if (!match) return;
+
+  const c1 = match[1].charCodeAt(0) - 65;
+  const r1 = +match[2] - 1;
+  const c2 = match[3].charCodeAt(0) - 65;
+  const r2 = +match[4] - 1;
+
+  const labels = [];
+  const datasets = [];
+  const numCols = c2 - c1 + 1;
+
+  if (numCols >= 2) {
+    for (let r = r1; r <= r2; r++) {
+      const cell = sheets[activeSheet].cells[cellKey(r, c1)];
+      labels.push(cell ? String(cell.value) : '');
+    }
+    for (let c = c1 + 1; c <= c2; c++) {
+      const data = [];
+      for (let r = r1; r <= r2; r++) {
+        const cell = sheets[activeSheet].cells[cellKey(r, c)];
+        data.push(cell ? toNum(cell.value) : 0);
+      }
+      datasets.push(data);
+    }
+  } else {
+    for (let r = r1; r <= r2; r++) {
+      labels.push('Row ' + (r + 1));
+      const cell = sheets[activeSheet].cells[cellKey(r, c1)];
+      if (!datasets[0]) datasets[0] = [];
+      datasets[0].push(cell ? toNum(cell.value) : 0);
+    }
+  }
+
+  chart.labels = labels;
+  chart.datasets = datasets;
+  const ctx = chart.canvas.getContext('2d');
+  drawChart(ctx, chart.canvas, chart.type, chart.title, labels, datasets);
+  document.getElementById('status-info').textContent = 'Chart refreshed';
 }
 
 // ============================================
