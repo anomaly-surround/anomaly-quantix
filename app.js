@@ -48,7 +48,7 @@ function init() {
       if (data.sheets && Array.isArray(data.sheets)) {
         sheets = data.sheets.map(s => sanitizeSheetData(s));
         activeSheet = Math.max(0, Math.min(toNum(data.activeSheet || 0), sheets.length - 1));
-        document.getElementById('file-name').value = escapeHTML(String(data.fileName || 'Untitled Spreadsheet'));
+        document.getElementById('file-name').value = String(data.fileName || 'Untitled Spreadsheet');
         renderSheetTabs();
         renderSheet();
         selectCell(0, 0);
@@ -714,7 +714,13 @@ document.getElementById('formula-input').addEventListener('keydown', (e) => {
 // ============================================
 
 // Safe expression tokenizer & parser (no eval/Function)
+let _formulaDepth = 0;
+const _formulaVisited = new Set();
+const MAX_FORMULA_DEPTH = 100;
+
 function evaluateFormula(formula, sheetIdx) {
+  if (_formulaDepth >= MAX_FORMULA_DEPTH) return '#CIRCULAR';
+  _formulaDepth++;
   try {
     const expr = formula.substring(1);
     const sheet = sheets[sheetIdx];
@@ -730,6 +736,8 @@ function evaluateFormula(formula, sheetIdx) {
     return typeof result === 'number' ? (Math.round(result * 1e10) / 1e10) : result;
   } catch (e) {
     return '#ERROR';
+  } finally {
+    _formulaDepth--;
   }
 }
 
@@ -800,9 +808,13 @@ function resolveTokens(tokens, sheet, sheetIdx) {
     if (t.type === 'cellref') {
       const col = t.value.charCodeAt(0) - 65;
       const row = parseInt(t.value.substring(1)) - 1;
+      const key = sheetIdx + ':' + cellKey(row, col);
+      if (_formulaVisited.has(key)) return { type: 'string', value: '#CIRCULAR' };
       const cell = sheet.cells[cellKey(row, col)];
       if (!cell) return { type: 'number', value: 0 };
+      _formulaVisited.add(key);
       const v = cell.formula ? evaluateFormula(cell.formula, sheetIdx) : cell.value;
+      _formulaVisited.delete(key);
       return typeof v === 'number' ? { type: 'number', value: v } : { type: 'string', value: String(v ?? '') };
     }
     if (t.type === 'range') {
@@ -1019,7 +1031,7 @@ const FORMULA_FUNCS = {
   SUBSTITUTE: (a) => { const [text, old, rep, nth] = a; if (nth) { let i = 0; return String(text).replace(new RegExp(escapeRegex(String(old)), 'g'), m => (++i===toNum(nth)) ? rep : m); } return String(text).split(String(old)).join(String(rep)); },
   FIND: (a) => { const idx = String(a[1]).indexOf(String(a[0]), toNum(a[2]??1)-1); return idx >= 0 ? idx+1 : '#VALUE'; },
   SEARCH: (a) => { const idx = String(a[1]).toLowerCase().indexOf(String(a[0]).toLowerCase(), toNum(a[2]??1)-1); return idx >= 0 ? idx+1 : '#VALUE'; },
-  REPT: (a) => String(a[0]).repeat(Math.min(toNum(a[1]), 10000)),
+  REPT: (a) => { const s = String(a[0]); const n = Math.min(toNum(a[1]), Math.floor(10000 / Math.max(s.length, 1))); return s.repeat(Math.max(0, n)); },
   TEXT: (a) => formatText(a[0], String(a[1])),
   VALUE: (a) => toNum(String(a[0]).replace(/[^0-9.\-]/g, '')),
   DOLLAR: (a) => '$' + toNum(a[0]).toFixed(toNum(a[1] ?? 2)),
@@ -1044,7 +1056,7 @@ const FORMULA_FUNCS = {
   DATE: (a) => new Date(toNum(a[0]), toNum(a[1])-1, toNum(a[2])).toLocaleDateString(),
   WEEKDAY: (a) => new Date(a[0]).getDay() + 1,
   WEEKNUM: (a) => { const d = new Date(a[0]); const s = new Date(d.getFullYear(),0,1); return Math.ceil(((d-s)/86400000+s.getDay()+1)/7); },
-  NETWORKDAYS: (a) => { const s = new Date(a[0]); const e = new Date(a[1]); let c = 0; const d = new Date(s); while(d<=e){const dy=d.getDay(); if(dy!==0&&dy!==6) c++; d.setDate(d.getDate()+1);} return c; },
+  NETWORKDAYS: (a) => { const s = new Date(a[0]); const e = new Date(a[1]); if (isNaN(s) || isNaN(e)) return '#VALUE'; const days = Math.round((e - s) / 86400000); if (Math.abs(days) > 36600) return '#VALUE'; let c = 0; const d = new Date(s); while(d<=e){const dy=d.getDay(); if(dy!==0&&dy!==6) c++; d.setDate(d.getDate()+1);} return c; },
   DATEDIF: (a) => { const s = new Date(a[0]); const e = new Date(a[1]); const u = String(a[2]).toUpperCase(); if(u==='D') return Math.round((e-s)/86400000); if(u==='M') return (e.getFullYear()-s.getFullYear())*12+e.getMonth()-s.getMonth(); if(u==='Y') return e.getFullYear()-s.getFullYear(); return '#VALUE'; },
 
   // Financial
@@ -2008,7 +2020,7 @@ function loadFile(event) {
           if (!data.sheets || !Array.isArray(data.sheets)) throw new Error('Invalid file');
           sheets = data.sheets.map(s => sanitizeSheetData(s));
           activeSheet = Math.max(0, Math.min(toNum(data.activeSheet || 0), sheets.length - 1));
-          document.getElementById('file-name').value = escapeHTML(String(data.fileName || file.name.replace('.qx', '')));
+          document.getElementById('file-name').value = String(data.fileName || file.name.replace('.qx', ''));
           renderSheetTabs();
           renderSheet();
           selectCell(0, 0);
@@ -2853,6 +2865,7 @@ function sanitizeSheetData(sheet) {
     const allowed = ['value', 'formula', 'bold', 'italic', 'underline', 'textColor', 'fillColor', 'align', 'detectedType', 'formatType', 'validation', 'merge', '_mergedInto', '_condColor', 'comment', 'deadline'];
     for (const [key, cell] of Object.entries(sheet.cells)) {
       if (!cell || typeof cell !== 'object') continue;
+      if (!/^\d+,\d+$/.test(key)) continue;
       const c = {};
       for (const prop of allowed) {
         if (cell[prop] !== undefined) {
@@ -4202,7 +4215,7 @@ if ('launchQueue' in window) {
         if (!data.sheets || !Array.isArray(data.sheets)) throw new Error('Invalid file');
         sheets = data.sheets.map(s => sanitizeSheetData(s));
         activeSheet = Math.max(0, Math.min(toNum(data.activeSheet || 0), sheets.length - 1));
-        document.getElementById('file-name').value = escapeHTML(String(data.fileName || file.name.replace('.qx', '')));
+        document.getElementById('file-name').value = String(data.fileName || file.name.replace('.qx', ''));
         renderSheetTabs();
         renderSheet();
         selectCell(0, 0);
