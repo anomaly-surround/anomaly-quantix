@@ -939,3 +939,152 @@ td.find-highlight .cell { outline: 2px solid var(--warning) !important; backgrou
 
 .help-colors { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .help-color { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+
+/* === Mobile Responsive === */
+@media (max-width: 768px) {
+  body { font-size: 12px; }
+
+  /* Top bar: stack vertically */
+  .top-bar {
+    flex-wrap: wrap;
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .brand-name { display: none; }
+
+  #file-name {
+    width: 120px;
+    font-size: 13px;
+    padding: 3px 6px;
+  }
+
+  .file-buttons {
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+
+  .file-buttons button {
+    padding: 5px 6px;
+    font-size: 11px;
+  }
+
+  .file-buttons button svg { width: 14px; height: 14px; }
+
+  /* Hide button text on mobile, keep icons */
+  .file-buttons button {
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* Toolbar: scrollable */
+  .toolbar {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 6px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .toolbar::-webkit-scrollbar { display: none; }
+
+  .toolbar button { width: 28px; height: 28px; flex-shrink: 0; }
+
+  .toolbar-divider { margin: 0 3px; }
+
+  /* Formula bar */
+  .formula-bar { padding: 3px 6px; gap: 4px; }
+
+  .cell-ref {
+    min-width: 45px;
+    padding: 3px 6px;
+    font-size: 11px;
+  }
+
+  #formula-input {
+    font-size: 12px;
+    padding: 4px 6px;
+  }
+
+  /* Sheet cells */
+  #sheet thead th {
+    padding: 4px 2px;
+    font-size: 10px;
+    min-width: 65px;
+  }
+
+  #sheet thead th:first-child { min-width: 32px; width: 32px; }
+
+  #sheet tbody td {
+    height: 24px;
+    min-width: 65px;
+    font-size: 12px;
+  }
+
+  #sheet tbody td:first-child {
+    min-width: 32px;
+    width: 32px;
+    font-size: 10px;
+  }
+
+  #sheet tbody td .cell {
+    padding: 1px 4px;
+    min-height: 24px;
+  }
+
+  /* Sheet tabs */
+  .sheet-tabs {
+    padding: 3px 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .sheet-tabs::-webkit-scrollbar { display: none; }
+
+  .sheet-tab { padding: 3px 10px; font-size: 11px; flex-shrink: 0; }
+
+  /* Status bar */
+  .status-bar { padding: 2px 6px; font-size: 10px; }
+
+  /* Modals: full width on mobile */
+  .modal { width: 95vw; max-height: 85vh; border-radius: 10px; }
+  .modal-lg { width: 95vw; }
+
+  .modal-header { padding: 12px 14px; }
+  .modal-header h2 { font-size: 15px; }
+  .modal-body { padding: 14px; }
+
+  /* Shortcuts grid: single column */
+  .shortcuts-body { grid-template-columns: 1fr; gap: 14px; }
+
+  /* Templates: single column */
+  .templates-grid { grid-template-columns: 1fr; }
+
+  /* Chart options: stack */
+  .chart-options { flex-direction: column; align-items: stretch; }
+
+  /* Find & replace */
+  .find-replace-bar {
+    right: 5px;
+    left: 5px;
+    padding: 6px 8px;
+  }
+
+  .find-replace-bar input { width: 100%; min-width: 0; }
+  .find-row, .replace-row { flex-wrap: wrap; }
+
+  /* Context menu */
+  .context-menu { min-width: 160px; }
+  .context-menu button { padding: 9px 12px; font-size: 13px; }
+
+  /* Date picker */
+  .date-picker-popup { left: 10px !important; right: 10px; }
+}
+
+@media (max-width: 400px) {
+  .file-controls { flex-direction: column; align-items: flex-start; gap: 4px; }
+
+  #file-name { width: 100%; }
+
+  .file-buttons { width: 100%; }
+}
