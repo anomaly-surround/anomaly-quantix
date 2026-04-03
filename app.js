@@ -282,6 +282,20 @@ function attachCellEvents() {
       return;
     }
 
+    // Block drag: if clicking inside an existing multi-cell selection, start block drag
+    if (!e.shiftKey && !e.ctrlKey && !e.metaKey && selectionRange && isInSelectionRange(row, col)) {
+      const r1 = Math.min(selectionRange.startRow, selectionRange.endRow);
+      const r2 = Math.max(selectionRange.startRow, selectionRange.endRow);
+      const c1 = Math.min(selectionRange.startCol, selectionRange.endCol);
+      const c2 = Math.max(selectionRange.startCol, selectionRange.endCol);
+      // Only if it's a real range (not a single cell)
+      if (r1 !== r2 || c1 !== c2) {
+        e.preventDefault();
+        startBlockDrag(r1, c1, r2, c2, row, col, e);
+        return;
+      }
+    }
+
     if (e.ctrlKey || e.metaKey) {
       // Ctrl+Click: add/remove cell from multi-selection
       const idx = multiSelection.findIndex(s => s.row === row && s.col === col);
@@ -4074,6 +4088,125 @@ function moveRow(fromRow, toRow) {
   renderSheet();
   selectCell(toRow, selectedCell.col);
   triggerAutoSave();
+}
+
+// ============================================
+// Feature: Block Drag (move selected range)
+// ============================================
+
+function isInSelectionRange(row, col) {
+  if (!selectionRange) return false;
+  const r1 = Math.min(selectionRange.startRow, selectionRange.endRow);
+  const r2 = Math.max(selectionRange.startRow, selectionRange.endRow);
+  const c1 = Math.min(selectionRange.startCol, selectionRange.endCol);
+  const c2 = Math.max(selectionRange.startCol, selectionRange.endCol);
+  return row >= r1 && row <= r2 && col >= c1 && col <= c2;
+}
+
+let blockDragData = null;
+
+function startBlockDrag(r1, c1, r2, c2, grabRow, grabCol, e) {
+  const offsetR = grabRow - r1;
+  const offsetC = grabCol - c1;
+  const blockH = r2 - r1;
+  const blockW = c2 - c1;
+
+  blockDragData = { r1, c1, r2, c2, offsetR, offsetC, blockH, blockW };
+  document.getElementById('sheet-container').classList.add('block-dragging');
+
+  const onMove = (e2) => {
+    const td = e2.target.closest('td[data-row]');
+    if (!td) return;
+    const targetRow = +td.dataset.row;
+    const targetCol = +td.dataset.col;
+
+    // Calculate where the block top-left would land
+    const newR1 = targetRow - offsetR;
+    const newC1 = targetCol - offsetC;
+    const newR2 = newR1 + blockH;
+    const newC2 = newC1 + blockW;
+
+    // Clear old drop indicators
+    document.querySelectorAll('td.block-drop-target').forEach(td => td.classList.remove('block-drop-target'));
+
+    // Show drop target
+    for (let r = newR1; r <= newR2; r++) {
+      for (let c = newC1; c <= newC2; c++) {
+        const t = getCellTd(r, c);
+        if (t) t.classList.add('block-drop-target');
+      }
+    }
+
+    blockDragData.targetR1 = newR1;
+    blockDragData.targetC1 = newC1;
+  };
+
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.querySelectorAll('td.block-drop-target').forEach(td => td.classList.remove('block-drop-target'));
+    document.getElementById('sheet-container').classList.remove('block-dragging');
+
+    if (blockDragData && blockDragData.targetR1 !== undefined) {
+      const { r1, c1, r2, c2, targetR1, targetC1 } = blockDragData;
+      // Don't move if dropped in the same spot
+      if (targetR1 !== r1 || targetC1 !== c1) {
+        moveBlock(r1, c1, r2, c2, targetR1, targetC1);
+      }
+    }
+    blockDragData = null;
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function moveBlock(r1, c1, r2, c2, targetR1, targetC1) {
+  const sheet = sheets[activeSheet];
+  const blockH = r2 - r1;
+  const blockW = c2 - c1;
+  const targetR2 = targetR1 + blockH;
+  const targetC2 = targetC1 + blockW;
+
+  // Bounds check
+  if (targetR1 < 0 || targetR2 >= ROWS || targetC1 < 0 || targetC2 >= COLS) return;
+
+  // Collect source cells
+  const srcCells = {};
+  for (let r = r1; r <= r2; r++) {
+    for (let c = c1; c <= c2; c++) {
+      const key = cellKey(r, c);
+      if (sheet.cells[key]) {
+        srcCells[(r - r1) + '_' + (c - c1)] = { ...sheet.cells[key] };
+      }
+      delete sheet.cells[key];
+    }
+  }
+
+  // Place at target
+  for (let r = 0; r <= blockH; r++) {
+    for (let c = 0; c <= blockW; c++) {
+      const src = srcCells[r + '_' + c];
+      const key = cellKey(targetR1 + r, targetC1 + c);
+      if (src) {
+        sheet.cells[key] = src;
+      } else {
+        delete sheet.cells[key];
+      }
+    }
+  }
+
+  // Update selection to new position
+  selectionRange = {
+    startRow: targetR1, startCol: targetC1,
+    endRow: targetR2, endCol: targetC2
+  };
+
+  renderSheet();
+  selectCell(targetR1, targetC1);
+  highlightRange();
+  triggerAutoSave();
+  document.getElementById('status-info').textContent = 'Block moved';
 }
 
 // ============================================

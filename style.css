@@ -1416,6 +1416,16 @@ td .cell.has-comment::before {
 }
 
 /* === Row drag === */
+/* Block drag */
+.sheet-container.block-dragging { cursor: grabbing; }
+.sheet-container.block-dragging .cell { cursor: grabbing; }
+
+td.block-drop-target .cell {
+  outline: 2px dashed var(--accent) !important;
+  outline-offset: -1px;
+  background: rgba(108, 92, 231, 0.15) !important;
+}
+
 tr.row-dragging {
   opacity: 0.5;
 }
