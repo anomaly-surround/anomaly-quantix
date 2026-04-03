@@ -79,12 +79,23 @@ function renderSheet() {
   const tbody = document.getElementById('sheet-body');
   const container = document.getElementById('sheet-container');
 
+  const hiddenCols = sheet.hiddenCols || [];
+  const hiddenRows = sheet.hiddenRows || [];
+  const hiddenFilterRows = sheet.hiddenFilterRows || [];
+  const allHiddenRows = new Set([...hiddenRows, ...hiddenFilterRows]);
+
   // Header
   let headHTML = '<tr><th></th>';
   for (let c = 0; c < COLS; c++) {
+    if (hiddenCols.includes(c)) {
+      headHTML += `<th data-col="${c}" style="display:none"></th>`;
+      continue;
+    }
     const w = sheet.colWidths[c] || 80;
-    headHTML += `<th style="width:${w}px;min-width:${w}px;max-width:${w}px" data-col="${c}">
-      ${COL_LETTERS[c]}
+    const hiddenIndicator = (c > 0 && hiddenCols.includes(c - 1)) ? ' hidden-col-indicator' : '';
+    const filterArrow = filtersActive ? `<span class="col-filter-arrow" data-filter-col="${c}">&#9660;</span>` : '';
+    headHTML += `<th style="width:${w}px;min-width:${w}px;max-width:${w}px" data-col="${c}" class="${hiddenIndicator}">
+      ${COL_LETTERS[c]}${filterArrow}
       <div class="col-resize" data-col="${c}"></div>
     </th>`;
   }
@@ -106,8 +117,23 @@ function renderSheet() {
   }
 
   for (let r = visibleStart; r < visibleEnd; r++) {
-    bodyHTML += `<tr><td>${r + 1}</td>`;
+    if (allHiddenRows.has(r)) {
+      bodyHTML += `<tr style="display:none"><td>${r + 1}</td>`;
+      for (let c = 0; c < COLS; c++) {
+        bodyHTML += `<td data-row="${r}" data-col="${c}"></td>`;
+      }
+      bodyHTML += '</tr>';
+      continue;
+    }
+
+    const hiddenRowIndicator = (r > 0 && allHiddenRows.has(r - 1)) ? ' class="hidden-row-indicator"' : '';
+    bodyHTML += `<tr${hiddenRowIndicator}><td data-rownumber="${r}">${r + 1}</td>`;
     for (let c = 0; c < COLS; c++) {
+      if (hiddenCols.includes(c)) {
+        bodyHTML += `<td data-row="${r}" data-col="${c}" style="display:none"></td>`;
+        continue;
+      }
+
       const key = cellKey(r, c);
       const cell = sheet.cells[key] || {};
 
@@ -120,7 +146,8 @@ function renderSheet() {
       const display = getDisplayValue(cell);
       const style = getCellStyle(cell);
       const type = detectType(cell);
-      const dropdownClass = cell.validation && cell.validation.type === 'list' ? ' has-dropdown' : '';
+      const dropdownClass = (cell.validation && cell.validation.type === 'list' ? ' has-dropdown' : '') +
+                            (cell.comment ? ' has-comment' : '');
 
       // Merge attributes
       let mergeAttr = '';
@@ -130,7 +157,9 @@ function renderSheet() {
         mergeAttr = ` rowspan="${rs}" colspan="${cs}"`;
       }
 
-      bodyHTML += `<td data-row="${r}" data-col="${c}"${mergeAttr}>
+      const colHiddenIndicator = (c > 0 && hiddenCols.includes(c - 1)) ? ' hidden-col-indicator' : '';
+
+      bodyHTML += `<td data-row="${r}" data-col="${c}"${mergeAttr} class="${colHiddenIndicator}">
         <div class="cell${dropdownClass}" data-type="${type}" style="${style}">${escapeHTML(display)}</div>
       </td>`;
     }
@@ -147,6 +176,9 @@ function renderSheet() {
 
   attachCellEvents();
   attachResizeEvents();
+  attachFilterEvents();
+  attachCommentHover();
+  attachRowDragEvents();
   repositionAllCharts();
 
   // Remove old scroll listener and re-add
@@ -352,6 +384,64 @@ function attachResizeEvents() {
   });
 }
 
+function attachFilterEvents() {
+  if (!filtersActive) return;
+  document.querySelectorAll('.col-filter-arrow').forEach(arrow => {
+    arrow.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const colIdx = +arrow.dataset.filterCol;
+      const th = arrow.closest('th');
+      showFilterDropdown(colIdx, th);
+    });
+  });
+}
+
+function attachCommentHover() {
+  const tbody = document.getElementById('sheet-body');
+  tbody.addEventListener('mouseover', (e) => {
+    const cellDiv = e.target.closest('.cell.has-comment');
+    if (!cellDiv) { hideCommentTooltip(); return; }
+    const td = cellDiv.closest('td[data-row]');
+    if (!td) return;
+    const row = +td.dataset.row;
+    const col = +td.dataset.col;
+    const cell = sheets[activeSheet].cells[cellKey(row, col)];
+    if (cell && cell.comment) showCommentTooltip(td, cell.comment);
+  });
+  tbody.addEventListener('mouseout', (e) => {
+    const cellDiv = e.target.closest('.cell.has-comment');
+    if (cellDiv) {
+      const related = e.relatedTarget?.closest('.cell.has-comment');
+      if (related !== cellDiv) hideCommentTooltip();
+    }
+  });
+}
+
+function attachRowDragEvents() {
+  const tbody = document.getElementById('sheet-body');
+  tbody.querySelectorAll('td[data-rownumber]').forEach(td => {
+    td.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      const row = +td.dataset.rownumber;
+      // Delay slightly to distinguish click from drag
+      const startY = e.clientY;
+      const onMove = (e2) => {
+        if (Math.abs(e2.clientY - startY) > 5) {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          startRowDrag(row, e);
+        }
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
 // ============================================
 // Selection
 // ============================================
@@ -386,6 +476,9 @@ function selectCell(row, col) {
 
   // Scroll into view
   if (td) td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+
+  // Show autofill handle
+  showAutofillHandle();
 }
 
 const FORMULA_REF_COLORS = [
@@ -533,7 +626,11 @@ function startEdit(row, col) {
   input.focus();
   input.setSelectionRange(raw.length, raw.length);
 
-  input.addEventListener('blur', () => commitEdit());
+  input.addEventListener('blur', () => { hideAutocompleteSuggestions(); commitEdit(); });
+  input.addEventListener('input', () => showAutocompleteSuggestions(input, row, col));
+  input.addEventListener('keydown', (e) => {
+    if (handleAutocompleteKey(e, input)) return;
+  });
 }
 
 function commitEdit() {
@@ -1516,7 +1613,34 @@ function showContextMenu(x, y, row, col) {
     <div class="separator"></div>
     <button onclick="showConditionalFormat(${row}, ${col});removeContextMenu()">Conditional Format...</button>
     <button onclick="showDataValidation(${row}, ${col});removeContextMenu()">Data Validation...</button>
-  `;
+    <div class="separator"></div>
+    <button onclick="hideRow(${row});removeContextMenu()">Hide Row ${row + 1}</button>
+    <button onclick="hideColumn(${col});removeContextMenu()">Hide Column ${COL_LETTERS[col]}</button>`;
+
+  // Show unhide options if adjacent rows/cols are hidden
+  const sheet = sheets[activeSheet];
+  const hRows = sheet.hiddenRows || [];
+  const hCols = sheet.hiddenCols || [];
+  if (hRows.includes(row - 1) || hRows.includes(row + 1)) {
+    html += `<button onclick="unhideRow(${row});removeContextMenu()">Unhide Adjacent Rows</button>`;
+  }
+  if (hCols.includes(col - 1) || hCols.includes(col + 1)) {
+    html += `<button onclick="unhideColumn(${col});removeContextMenu()">Unhide Adjacent Columns</button>`;
+  }
+
+  // Comment options
+  const commentCell = sheet.cells[cellKey(row, col)] || {};
+  if (commentCell.comment) {
+    html += `
+    <div class="separator"></div>
+    <button onclick="addComment(${row}, ${col});removeContextMenu()">Edit Comment...</button>
+    <button onclick="deleteComment(${row}, ${col});removeContextMenu()">Delete Comment</button>`;
+  } else {
+    html += `
+    <div class="separator"></div>
+    <button onclick="addComment(${row}, ${col});removeContextMenu()">Add Comment...</button>`;
+  }
+  html += '';
 
   menu.innerHTML = html;
   document.body.appendChild(menu);
@@ -2724,7 +2848,7 @@ function sanitizeSheetData(sheet) {
     }
   }
   if (sheet.cells && typeof sheet.cells === 'object') {
-    const allowed = ['value', 'formula', 'bold', 'italic', 'underline', 'textColor', 'fillColor', 'align', 'detectedType', 'formatType', 'validation', 'merge', '_mergedInto', '_condColor'];
+    const allowed = ['value', 'formula', 'bold', 'italic', 'underline', 'textColor', 'fillColor', 'align', 'detectedType', 'formatType', 'validation', 'merge', '_mergedInto', '_condColor', 'comment', 'deadline'];
     for (const [key, cell] of Object.entries(sheet.cells)) {
       if (!cell || typeof cell !== 'object') continue;
       const c = {};
@@ -2740,6 +2864,10 @@ function sanitizeSheetData(sheet) {
       clean.cells[key] = c;
     }
   }
+  // Preserve hiddenRows, hiddenCols, hiddenFilterRows
+  if (Array.isArray(sheet.hiddenRows)) clean.hiddenRows = sheet.hiddenRows.filter(r => typeof r === 'number' && r >= 0 && r < ROWS);
+  if (Array.isArray(sheet.hiddenCols)) clean.hiddenCols = sheet.hiddenCols.filter(c => typeof c === 'number' && c >= 0 && c < COLS);
+  if (Array.isArray(sheet.hiddenFilterRows)) clean.hiddenFilterRows = sheet.hiddenFilterRows.filter(r => typeof r === 'number' && r >= 0 && r < ROWS);
   return clean;
 }
 
@@ -3409,9 +3537,642 @@ function showAutoOrganizeToast(changes) {
 }
 
 // ============================================
+// Feature: Auto-fill drag handle
+// ============================================
+
+let autofillDragging = false;
+let autofillStart = null;
+let autofillEnd = null;
+
+function showAutofillHandle() {
+  removeAutofillHandle();
+  const td = getCellTd(selectedCell.row, selectedCell.col);
+  if (!td) return;
+  const handle = document.createElement('div');
+  handle.className = 'autofill-handle';
+  handle.addEventListener('mousedown', startAutofill);
+  td.style.position = 'relative';
+  td.appendChild(handle);
+}
+
+function removeAutofillHandle() {
+  document.querySelectorAll('.autofill-handle').forEach(h => h.remove());
+}
+
+function startAutofill(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  autofillDragging = true;
+  autofillStart = { row: selectedCell.row, col: selectedCell.col };
+  autofillEnd = { row: selectedCell.row, col: selectedCell.col };
+
+  const onMove = (e2) => {
+    const td = e2.target.closest('td[data-row]');
+    if (!td) return;
+    autofillEnd = { row: +td.dataset.row, col: +td.dataset.col };
+  };
+
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    autofillDragging = false;
+    performAutofill();
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function performAutofill() {
+  if (!autofillStart || !autofillEnd) return;
+  const sr = autofillStart.row, sc = autofillStart.col;
+  const er = autofillEnd.row, ec = autofillEnd.col;
+  if (sr === er && sc === ec) return;
+
+  const sheet = sheets[activeSheet];
+  const srcKey = cellKey(sr, sc);
+  const srcCell = sheet.cells[srcKey] || {};
+  const srcVal = srcCell.value;
+  const srcFormula = srcCell.formula;
+
+  // Determine fill direction
+  const fillDown = er > sr;
+  const fillRight = ec > sc;
+
+  // Detect sequences
+  const DAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+  const DAYS_SHORT = ['sun','mon','tue','wed','thu','fri','sat'];
+  const MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const MONTHS_SHORT = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+
+  function detectSequenceIndex(val) {
+    if (val === undefined || val === null) return null;
+    const v = String(val).toLowerCase();
+    let idx;
+    idx = DAYS.indexOf(v); if (idx >= 0) return { seq: DAYS, idx, origCase: String(val) };
+    idx = DAYS_SHORT.indexOf(v); if (idx >= 0) return { seq: DAYS_SHORT, idx, origCase: String(val) };
+    idx = MONTHS.indexOf(v); if (idx >= 0) return { seq: MONTHS, idx, origCase: String(val) };
+    idx = MONTHS_SHORT.indexOf(v); if (idx >= 0) return { seq: MONTHS_SHORT, idx, origCase: String(val) };
+    return null;
+  }
+
+  function matchCase(str, ref) {
+    if (ref === ref.toUpperCase()) return str.toUpperCase();
+    if (ref[0] === ref[0].toUpperCase()) return str[0].toUpperCase() + str.slice(1);
+    return str;
+  }
+
+  function adjustFormula(formula, rowOff, colOff) {
+    return formula.replace(/([A-Z])(\d+)/gi, (m, col, row) => {
+      const newCol = col.toUpperCase().charCodeAt(0) - 65 + colOff;
+      const newRow = parseInt(row) + rowOff;
+      if (newCol < 0 || newCol >= COLS || newRow < 1 || newRow > ROWS) return m;
+      return String.fromCharCode(65 + newCol) + newRow;
+    });
+  }
+
+  if (fillDown) {
+    for (let r = sr + 1; r <= er; r++) {
+      const offset = r - sr;
+      const key = cellKey(r, sc);
+      if (srcFormula) {
+        const newFormula = adjustFormula(srcFormula, offset, 0);
+        sheet.cells[key] = { ...(sheet.cells[key] || {}), formula: newFormula, value: evaluateFormula(newFormula, activeSheet) };
+      } else {
+        const seqInfo = detectSequenceIndex(srcVal);
+        if (seqInfo) {
+          const newIdx = (seqInfo.idx + offset) % seqInfo.seq.length;
+          sheet.cells[key] = { ...(sheet.cells[key] || {}), value: matchCase(seqInfo.seq[newIdx], seqInfo.origCase), formula: undefined };
+        } else if (typeof srcVal === 'number') {
+          sheet.cells[key] = { ...(sheet.cells[key] || {}), value: srcVal + offset, formula: undefined, detectedType: 'number' };
+        } else if (typeof srcVal === 'string' && (/^\d{4}-\d{2}-\d{2}$/.test(srcVal) || /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(srcVal))) {
+          const d = new Date(srcVal);
+          d.setDate(d.getDate() + offset);
+          const ds = d.toISOString().split('T')[0];
+          sheet.cells[key] = { ...(sheet.cells[key] || {}), value: ds, formula: undefined, detectedType: 'date' };
+        } else {
+          sheet.cells[key] = { ...(sheet.cells[key] || {}), value: srcVal, formula: undefined };
+        }
+      }
+    }
+  } else if (fillRight) {
+    for (let c = sc + 1; c <= ec; c++) {
+      const offset = c - sc;
+      const key = cellKey(sr, c);
+      if (srcFormula) {
+        const newFormula = adjustFormula(srcFormula, 0, offset);
+        sheet.cells[key] = { ...(sheet.cells[key] || {}), formula: newFormula, value: evaluateFormula(newFormula, activeSheet) };
+      } else {
+        const seqInfo = detectSequenceIndex(srcVal);
+        if (seqInfo) {
+          const newIdx = (seqInfo.idx + offset) % seqInfo.seq.length;
+          sheet.cells[key] = { ...(sheet.cells[key] || {}), value: matchCase(seqInfo.seq[newIdx], seqInfo.origCase), formula: undefined };
+        } else if (typeof srcVal === 'number') {
+          sheet.cells[key] = { ...(sheet.cells[key] || {}), value: srcVal + offset, formula: undefined, detectedType: 'number' };
+        } else {
+          sheet.cells[key] = { ...(sheet.cells[key] || {}), value: srcVal, formula: undefined };
+        }
+      }
+    }
+  }
+
+  recalcDependents();
+  renderSheet();
+  selectCell(selectedCell.row, selectedCell.col);
+  triggerAutoSave();
+}
+
+// ============================================
+// Feature: Column Filters
+// ============================================
+
+let filtersActive = false;
+
+function toggleFilters() {
+  filtersActive = !filtersActive;
+  const btn = document.getElementById('btn-filter');
+  if (filtersActive) {
+    btn.classList.add('filter-active');
+    // Initialize hiddenRows on each sheet if not present
+    sheets.forEach(s => { if (!s.hiddenFilterRows) s.hiddenFilterRows = []; });
+  } else {
+    btn.classList.remove('filter-active');
+    // Clear all filter hidden rows
+    sheets.forEach(s => { s.hiddenFilterRows = []; });
+  }
+  renderSheet();
+  selectCell(selectedCell.row, selectedCell.col);
+}
+
+function showFilterDropdown(colIdx, thEl) {
+  removeFilterDropdown();
+  const sheet = sheets[activeSheet];
+  if (!sheet.hiddenFilterRows) sheet.hiddenFilterRows = [];
+
+  // Collect unique values in this column
+  const values = new Set();
+  for (let r = 0; r < ROWS; r++) {
+    const cell = sheet.cells[cellKey(r, colIdx)];
+    if (cell && cell.value !== undefined && cell.value !== '') {
+      values.add(String(getDisplayValue(cell)));
+    }
+  }
+
+  const hiddenSet = new Set(sheet.hiddenFilterRows);
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'filter-dropdown';
+  dropdown.id = 'active-filter-dropdown';
+  const rect = thEl.getBoundingClientRect();
+  dropdown.style.left = rect.left + 'px';
+  dropdown.style.top = rect.bottom + 'px';
+
+  let html = '';
+  const sortedVals = [...values].sort();
+  for (const val of sortedVals) {
+    // Find rows with this value to check if they're hidden
+    const rowsWithVal = [];
+    for (let r = 0; r < ROWS; r++) {
+      const cell = sheet.cells[cellKey(r, colIdx)];
+      if (cell && String(getDisplayValue(cell)) === val) rowsWithVal.push(r);
+    }
+    const allHidden = rowsWithVal.every(r => hiddenSet.has(r));
+    html += `<label><input type="checkbox" data-filter-col="${colIdx}" data-filter-val="${escapeAttr(val)}" ${allHidden ? '' : 'checked'}> ${escapeHTML(val)}</label>`;
+  }
+  html += `<div class="filter-actions"><button onclick="clearColumnFilter(${colIdx})">Clear</button><button onclick="applyFilterDropdown(${colIdx})">Apply</button></div>`;
+
+  dropdown.innerHTML = html;
+  document.body.appendChild(dropdown);
+
+  // Adjust position
+  const dr = dropdown.getBoundingClientRect();
+  if (dr.right > window.innerWidth) dropdown.style.left = (window.innerWidth - dr.width - 5) + 'px';
+  if (dr.bottom > window.innerHeight) dropdown.style.top = (rect.top - dr.height) + 'px';
+
+  setTimeout(() => {
+    document.addEventListener('click', function closeFilter(e) {
+      if (!dropdown.contains(e.target)) {
+        removeFilterDropdown();
+        document.removeEventListener('click', closeFilter);
+      }
+    });
+  }, 10);
+}
+
+function removeFilterDropdown() {
+  const dd = document.getElementById('active-filter-dropdown');
+  if (dd) dd.remove();
+}
+
+function applyFilterDropdown(colIdx) {
+  const sheet = sheets[activeSheet];
+  const checkboxes = document.querySelectorAll(`input[data-filter-col="${colIdx}"]`);
+  const uncheckedVals = new Set();
+  checkboxes.forEach(cb => {
+    if (!cb.checked) uncheckedVals.add(cb.dataset.filterVal);
+  });
+
+  // Remove old filter hidden rows for this column, then re-add
+  const newHidden = new Set(sheet.hiddenFilterRows || []);
+
+  // First, unhide all rows that were hidden by this column's filter
+  for (let r = 0; r < ROWS; r++) {
+    const cell = sheet.cells[cellKey(r, colIdx)];
+    if (cell && uncheckedVals.size === 0) {
+      newHidden.delete(r);
+    }
+  }
+
+  // Now hide rows with unchecked values
+  for (let r = 0; r < ROWS; r++) {
+    const cell = sheet.cells[cellKey(r, colIdx)];
+    if (cell) {
+      const dv = String(getDisplayValue(cell));
+      if (uncheckedVals.has(dv)) {
+        newHidden.add(r);
+      } else {
+        newHidden.delete(r);
+      }
+    }
+  }
+
+  sheet.hiddenFilterRows = [...newHidden];
+  removeFilterDropdown();
+  renderSheet();
+  selectCell(selectedCell.row, selectedCell.col);
+  triggerAutoSave();
+}
+
+function clearColumnFilter(colIdx) {
+  const sheet = sheets[activeSheet];
+  // Remove rows hidden by filtering on this column
+  const toRemove = new Set();
+  for (let r = 0; r < ROWS; r++) {
+    const cell = sheet.cells[cellKey(r, colIdx)];
+    if (cell) toRemove.add(r);
+  }
+  sheet.hiddenFilterRows = (sheet.hiddenFilterRows || []).filter(r => !toRemove.has(r));
+  removeFilterDropdown();
+  renderSheet();
+  selectCell(selectedCell.row, selectedCell.col);
+  triggerAutoSave();
+}
+
+// ============================================
+// Feature: Cell Comments
+// ============================================
+
+let activeCommentTooltip = null;
+
+function addComment(row, col) {
+  const key = cellKey(row, col);
+  const sheet = sheets[activeSheet];
+  const cell = sheet.cells[key] || {};
+  const existing = cell.comment || '';
+  const text = prompt('Enter comment:', existing);
+  if (text === null) return;
+  if (!sheet.cells[key]) sheet.cells[key] = {};
+  if (text === '') {
+    delete sheet.cells[key].comment;
+  } else {
+    sheet.cells[key].comment = text;
+  }
+  renderSheet();
+  selectCell(row, col);
+  triggerAutoSave();
+}
+
+function deleteComment(row, col) {
+  const key = cellKey(row, col);
+  const sheet = sheets[activeSheet];
+  if (sheet.cells[key]) {
+    delete sheet.cells[key].comment;
+    renderSheet();
+    selectCell(row, col);
+    triggerAutoSave();
+  }
+}
+
+function showCommentTooltip(td, comment) {
+  hideCommentTooltip();
+  const tip = document.createElement('div');
+  tip.className = 'comment-tooltip';
+  tip.textContent = comment;
+  document.body.appendChild(tip);
+  const rect = td.getBoundingClientRect();
+  tip.style.left = (rect.right + 5) + 'px';
+  tip.style.top = rect.top + 'px';
+  // Adjust if off-screen
+  const tipRect = tip.getBoundingClientRect();
+  if (tipRect.right > window.innerWidth) tip.style.left = (rect.left - tipRect.width - 5) + 'px';
+  if (tipRect.bottom > window.innerHeight) tip.style.top = (window.innerHeight - tipRect.height - 5) + 'px';
+  activeCommentTooltip = tip;
+}
+
+function hideCommentTooltip() {
+  if (activeCommentTooltip) { activeCommentTooltip.remove(); activeCommentTooltip = null; }
+}
+
+// ============================================
+// Feature: Print / Export PDF
+// ============================================
+
+function printSheet() {
+  const fileName = document.getElementById('file-name').value || 'Spreadsheet';
+  document.body.setAttribute('data-print-title', fileName);
+  window.print();
+}
+
+// ============================================
+// Feature: Row/Column Hide
+// ============================================
+
+function hideRow(row) {
+  const sheet = sheets[activeSheet];
+  if (!sheet.hiddenRows) sheet.hiddenRows = [];
+  if (!sheet.hiddenRows.includes(row)) sheet.hiddenRows.push(row);
+  renderSheet();
+  selectCell(selectedCell.row, selectedCell.col);
+  triggerAutoSave();
+}
+
+function unhideRow(row) {
+  const sheet = sheets[activeSheet];
+  if (!sheet.hiddenRows) return;
+  // Unhide row and adjacent hidden rows
+  const toUnhide = [row];
+  // Also check row-1 and row+1
+  for (let r = row - 1; r >= 0; r--) {
+    if (sheet.hiddenRows.includes(r)) toUnhide.push(r); else break;
+  }
+  for (let r = row + 1; r < ROWS; r++) {
+    if (sheet.hiddenRows.includes(r)) toUnhide.push(r); else break;
+  }
+  sheet.hiddenRows = sheet.hiddenRows.filter(r => !toUnhide.includes(r));
+  renderSheet();
+  selectCell(selectedCell.row, selectedCell.col);
+  triggerAutoSave();
+}
+
+function hideColumn(col) {
+  const sheet = sheets[activeSheet];
+  if (!sheet.hiddenCols) sheet.hiddenCols = [];
+  if (!sheet.hiddenCols.includes(col)) sheet.hiddenCols.push(col);
+  renderSheet();
+  selectCell(selectedCell.row, selectedCell.col);
+  triggerAutoSave();
+}
+
+function unhideColumn(col) {
+  const sheet = sheets[activeSheet];
+  if (!sheet.hiddenCols) return;
+  const toUnhide = [col];
+  for (let c = col - 1; c >= 0; c--) {
+    if (sheet.hiddenCols.includes(c)) toUnhide.push(c); else break;
+  }
+  for (let c = col + 1; c < COLS; c++) {
+    if (sheet.hiddenCols.includes(c)) toUnhide.push(c); else break;
+  }
+  sheet.hiddenCols = sheet.hiddenCols.filter(c => !toUnhide.includes(c));
+  renderSheet();
+  selectCell(selectedCell.row, selectedCell.col);
+  triggerAutoSave();
+}
+
+// ============================================
+// Feature: Drag & Drop Rows
+// ============================================
+
+let rowDragSource = null;
+let rowDragIndicator = null;
+
+function startRowDrag(row, e) {
+  e.preventDefault();
+  rowDragSource = row;
+
+  const onMove = (e2) => {
+    const td = e2.target.closest('td[data-row]');
+    if (!td) return;
+    const targetRow = +td.dataset.row;
+    // Remove old indicator
+    document.querySelectorAll('.row-drop-indicator').forEach(tr => tr.classList.remove('row-drop-indicator'));
+    document.querySelectorAll('.row-dragging').forEach(tr => tr.classList.remove('row-dragging'));
+    // Mark source
+    const srcTr = td.closest('tbody')?.querySelectorAll('tr');
+    if (srcTr) {
+      srcTr.forEach(tr => {
+        const firstTd = tr.querySelector('td[data-row]');
+        if (firstTd && +firstTd.dataset.row === rowDragSource) tr.classList.add('row-dragging');
+        if (firstTd && +firstTd.dataset.row === targetRow) tr.classList.add('row-drop-indicator');
+      });
+    }
+    rowDragIndicator = targetRow;
+  };
+
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.querySelectorAll('.row-drop-indicator, .row-dragging').forEach(tr => {
+      tr.classList.remove('row-drop-indicator');
+      tr.classList.remove('row-dragging');
+    });
+    if (rowDragSource !== null && rowDragIndicator !== null && rowDragSource !== rowDragIndicator) {
+      moveRow(rowDragSource, rowDragIndicator);
+    }
+    rowDragSource = null;
+    rowDragIndicator = null;
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function moveRow(fromRow, toRow) {
+  const sheet = sheets[activeSheet];
+  // Collect all cells in the source row
+  const srcCells = {};
+  for (let c = 0; c < COLS; c++) {
+    const key = cellKey(fromRow, c);
+    if (sheet.cells[key]) { srcCells[c] = { ...sheet.cells[key] }; delete sheet.cells[key]; }
+  }
+
+  // Shift rows
+  if (fromRow < toRow) {
+    for (let r = fromRow; r < toRow; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const below = cellKey(r + 1, c);
+        const cur = cellKey(r, c);
+        if (sheet.cells[below]) { sheet.cells[cur] = sheet.cells[below]; delete sheet.cells[below]; }
+        else delete sheet.cells[cur];
+      }
+    }
+    // Place source at toRow
+    for (let c = 0; c < COLS; c++) {
+      const key = cellKey(toRow, c);
+      if (srcCells[c]) sheet.cells[key] = srcCells[c];
+    }
+  } else {
+    for (let r = fromRow; r > toRow; r--) {
+      for (let c = 0; c < COLS; c++) {
+        const above = cellKey(r - 1, c);
+        const cur = cellKey(r, c);
+        if (sheet.cells[above]) { sheet.cells[cur] = sheet.cells[above]; delete sheet.cells[above]; }
+        else delete sheet.cells[cur];
+      }
+    }
+    for (let c = 0; c < COLS; c++) {
+      const key = cellKey(toRow, c);
+      if (srcCells[c]) sheet.cells[key] = srcCells[c];
+    }
+  }
+
+  renderSheet();
+  selectCell(toRow, selectedCell.col);
+  triggerAutoSave();
+}
+
+// ============================================
+// Feature: Dark/Light Theme Toggle
+// ============================================
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme');
+  const newTheme = current === 'light' ? 'dark' : 'light';
+  html.setAttribute('data-theme', newTheme);
+  localStorage.setItem('quantix-theme', newTheme);
+  updateThemeButton(newTheme);
+}
+
+function updateThemeButton(theme) {
+  const btn = document.getElementById('btn-theme');
+  if (!btn) return;
+  if (theme === 'light') {
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/></svg>';
+    btn.title = 'Switch to Dark Theme';
+  } else {
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+    btn.title = 'Switch to Light Theme';
+  }
+}
+
+function loadTheme() {
+  const saved = localStorage.getItem('quantix-theme');
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved);
+    updateThemeButton(saved);
+  }
+}
+
+// ============================================
+// Feature: Auto-fill Suggestions (Autocomplete)
+// ============================================
+
+let autocompleteDropdown = null;
+let autocompleteItems = [];
+let autocompleteSelectedIdx = -1;
+
+function showAutocompleteSuggestions(input, row, col) {
+  hideAutocompleteSuggestions();
+  const val = input.value;
+  if (!val || val.startsWith('=') || val.length < 2) return;
+
+  const sheet = sheets[activeSheet];
+  const lower = val.toLowerCase();
+  const matches = new Set();
+
+  // Check same column for matching values
+  for (let r = 0; r < ROWS; r++) {
+    if (r === row) continue;
+    const cell = sheet.cells[cellKey(r, col)];
+    if (cell && cell.value !== undefined && cell.value !== '') {
+      const sv = String(cell.value);
+      if (sv.toLowerCase().startsWith(lower) && sv.toLowerCase() !== lower) {
+        matches.add(sv);
+        if (matches.size >= 5) break;
+      }
+    }
+  }
+
+  if (matches.size === 0) return;
+
+  autocompleteItems = [...matches];
+  autocompleteSelectedIdx = -1;
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'autocomplete-dropdown';
+  autocompleteDropdown = dropdown;
+
+  autocompleteItems.forEach((item, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'ac-item';
+    btn.textContent = item;
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      input.value = item;
+      hideAutocompleteSuggestions();
+    });
+    dropdown.appendChild(btn);
+  });
+
+  document.body.appendChild(dropdown);
+
+  // Position below the cell
+  const td = getCellTd(row, col);
+  if (td) {
+    const rect = td.getBoundingClientRect();
+    dropdown.style.left = rect.left + 'px';
+    dropdown.style.top = rect.bottom + 'px';
+    dropdown.style.minWidth = rect.width + 'px';
+  }
+}
+
+function hideAutocompleteSuggestions() {
+  if (autocompleteDropdown) { autocompleteDropdown.remove(); autocompleteDropdown = null; }
+  autocompleteItems = [];
+  autocompleteSelectedIdx = -1;
+}
+
+function handleAutocompleteKey(e, input) {
+  if (!autocompleteDropdown) return false;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    autocompleteSelectedIdx = Math.min(autocompleteSelectedIdx + 1, autocompleteItems.length - 1);
+    updateAutocompleteHighlight();
+    return true;
+  }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    autocompleteSelectedIdx = Math.max(autocompleteSelectedIdx - 1, -1);
+    updateAutocompleteHighlight();
+    return true;
+  }
+  if ((e.key === 'Tab' || e.key === 'Enter') && autocompleteSelectedIdx >= 0) {
+    e.preventDefault();
+    input.value = autocompleteItems[autocompleteSelectedIdx];
+    hideAutocompleteSuggestions();
+    return true;
+  }
+  if (e.key === 'Escape') {
+    hideAutocompleteSuggestions();
+    return true;
+  }
+  return false;
+}
+
+function updateAutocompleteHighlight() {
+  if (!autocompleteDropdown) return;
+  autocompleteDropdown.querySelectorAll('.ac-item').forEach((item, idx) => {
+    item.classList.toggle('ac-selected', idx === autocompleteSelectedIdx);
+  });
+}
+
+// ============================================
 // Init
 // ============================================
 
+loadTheme();
 init();
 
 // PWA & File Handling

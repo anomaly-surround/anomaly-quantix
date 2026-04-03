@@ -1019,6 +1019,254 @@ td.find-highlight .cell { outline: 2px solid var(--warning) !important; backgrou
 .help-colors { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .help-color { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; }
 
+/* === Auto-fill handle === */
+.autofill-handle {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
+  border: 1px solid var(--bg-primary);
+  cursor: crosshair;
+  z-index: 5;
+}
+
+.autofill-preview td .cell {
+  background: rgba(108, 92, 231, 0.08);
+  border: 1px dashed var(--accent);
+}
+
+/* === Column filters === */
+.col-filter-arrow {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 8px;
+  color: var(--text-dim);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.col-filter-arrow:hover { color: var(--accent); }
+
+.filter-dropdown {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  min-width: 180px;
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 200;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+.filter-dropdown label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.filter-dropdown label:hover { background: var(--bg-hover); }
+
+.filter-dropdown .filter-actions {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.filter-dropdown .filter-actions button {
+  flex: 1;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.filter-dropdown .filter-actions button:hover { background: var(--bg-hover); color: var(--text); }
+
+.toolbar button.filter-active {
+  background: var(--success);
+  color: white;
+  border-color: var(--success);
+}
+
+/* === Cell comments === */
+td .cell.has-comment {
+  position: relative;
+}
+
+td .cell.has-comment::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-top: 6px solid var(--danger);
+  z-index: 1;
+}
+
+.comment-tooltip {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text);
+  max-width: 250px;
+  z-index: 300;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+
+/* === Print styles === */
+@media print {
+  .top-bar, .toolbar, .formula-bar, .status-bar, .sheet-tabs,
+  .find-replace-bar, .context-menu, .modal-overlay,
+  .autofill-handle, .comment-tooltip, .filter-dropdown,
+  .autocomplete-dropdown { display: none !important; }
+
+  body { background: white; color: black; overflow: visible; }
+  #app { height: auto; overflow: visible; }
+
+  .sheet-container {
+    overflow: visible !important;
+    height: auto !important;
+    flex: none;
+  }
+
+  #sheet { width: 100%; }
+
+  #sheet thead th {
+    background: #f0f0f0 !important;
+    color: #333 !important;
+    border: 1px solid #999 !important;
+    position: static;
+  }
+
+  #sheet thead th:first-child {
+    position: static;
+  }
+
+  #sheet tbody td {
+    border: 1px solid #ccc !important;
+    color: black !important;
+    position: static;
+  }
+
+  #sheet tbody td:first-child {
+    background: #f0f0f0 !important;
+    color: #333 !important;
+    position: static;
+  }
+
+  #sheet tbody td .cell {
+    color: black !important;
+  }
+
+  @page {
+    margin: 1cm;
+  }
+
+  body::before {
+    content: attr(data-print-title);
+    display: block;
+    font-size: 16pt;
+    font-weight: bold;
+    margin-bottom: 10px;
+    text-align: center;
+    color: black;
+  }
+}
+
+/* === Row/Column hide indicators === */
+.hidden-row-indicator td:first-child {
+  border-top: 3px double var(--accent) !important;
+}
+
+.hidden-col-indicator {
+  border-left: 3px double var(--accent) !important;
+}
+
+/* === Row drag === */
+tr.row-dragging {
+  opacity: 0.5;
+}
+
+.row-drop-indicator td {
+  border-top: 2px solid var(--accent) !important;
+}
+
+/* === Dark/Light theme toggle === */
+[data-theme="light"] {
+  --bg-primary: #f5f5f5;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #e8e8e8;
+  --bg-cell: #ffffff;
+  --bg-hover: #eeeef5;
+  --bg-selected: #d5d5f0;
+  --border: #d0d0d0;
+  --border-light: #b0b0b0;
+  --text: #1a1a2e;
+  --text-dim: #555580;
+  --accent: #6c5ce7;
+  --accent-hover: #7f6ff0;
+  --accent-glow: rgba(108, 92, 231, 0.2);
+  --success: #00a89d;
+  --warning: #e0a800;
+  --danger: #e05555;
+  --header-bg: #eaeaf0;
+}
+
+[data-theme="light"] .sheet-container::-webkit-scrollbar-track { background: #f0f0f0; }
+[data-theme="light"] .sheet-container::-webkit-scrollbar-thumb { background: #c0c0c0; }
+[data-theme="light"] .date-picker-popup input[type="date"] { color-scheme: light; }
+
+/* === Autocomplete dropdown === */
+.autocomplete-dropdown {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-width: 150px;
+  max-height: 160px;
+  overflow-y: auto;
+  z-index: 200;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.autocomplete-dropdown .ac-item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.autocomplete-dropdown .ac-item:hover,
+.autocomplete-dropdown .ac-item.ac-selected {
+  background: var(--bg-hover);
+}
+
 /* === Mobile Responsive === */
 @media (max-width: 768px) {
   body { font-size: 12px; }
