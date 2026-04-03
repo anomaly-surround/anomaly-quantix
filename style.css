@@ -59,14 +59,8 @@ body {
 .logo {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, var(--accent), #a29bfe);
   border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 18px;
-  color: white;
+  object-fit: cover;
 }
 
 .brand-name {
