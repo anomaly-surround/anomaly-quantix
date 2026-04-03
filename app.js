@@ -4537,7 +4537,7 @@ function signOut() {
 
 function handleCheckout() {
   const discount = document.getElementById('discount-code-input').value.trim();
-  const url = discount ? PRO_CHECKOUT_URL + '?discount=' + encodeURIComponent(discount) : PRO_CHECKOUT_URL;
+  const url = discount ? PRO_CHECKOUT_URL + '?checkout[discount_code]=' + encodeURIComponent(discount) : PRO_CHECKOUT_URL;
   window.open(url, '_blank');
 }
 
