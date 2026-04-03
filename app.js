@@ -4536,7 +4536,9 @@ function signOut() {
 }
 
 function handleCheckout() {
-  window.open(PRO_CHECKOUT_URL, '_blank');
+  const discount = document.getElementById('discount-code-input').value.trim();
+  const url = discount ? PRO_CHECKOUT_URL + '?discount=' + encodeURIComponent(discount) : PRO_CHECKOUT_URL;
+  window.open(url, '_blank');
 }
 
 function activateFromConfirm() {

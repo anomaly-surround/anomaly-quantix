@@ -254,6 +254,26 @@ body {
 
 .pro-check { color: var(--success); font-weight: 700; font-size: 16px; }
 
+.pro-discount {
+  max-width: 250px;
+  margin: 0 auto 12px;
+}
+
+.pro-discount input {
+  width: 100%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: center;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.pro-discount input:focus { border-color: var(--accent); }
+
 .pro-checkout {
   display: inline-block;
   padding: 12px 40px;
