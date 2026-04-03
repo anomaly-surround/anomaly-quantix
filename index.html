@@ -26,6 +26,7 @@
           <button onclick="exportCSV()" title="Export CSV"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</button>
           <button onclick="exportExcel()" title="Export Excel"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Excel</button>
           <button onclick="showTemplates()" title="Templates"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> Templates</button>
+          <button onclick="document.getElementById('help-modal').style.display='flex'" title="Help"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Help</button>
           <button onclick="document.getElementById('shortcuts-modal').style.display='flex'" title="Shortcuts"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="6" y1="16" x2="6" y2="16"/><line x1="10" y1="16" x2="14" y2="16"/><line x1="18" y1="16" x2="18" y2="16"/></svg> Shortcuts</button>
         </div>
       </div>
@@ -294,6 +295,98 @@
           <button class="btn-primary" onclick="createChart()">Create Chart</button>
         </div>
         <canvas id="chart-canvas" width="600" height="350"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help Modal -->
+  <div class="modal-overlay" id="help-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>How to Use Anomaly Quantix</h2>
+        <button onclick="document.getElementById('help-modal').style.display='none'">&times;</button>
+      </div>
+      <div class="modal-body help-body">
+
+        <div class="help-section">
+          <h3>Getting Started</h3>
+          <p>Click any cell and start typing to enter data. Press <kbd>Enter</kbd> to confirm and move down, or <kbd>Tab</kbd> to move right. Double-click or press <kbd>F2</kbd> to edit an existing cell.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>Formulas</h3>
+          <p>Start with <kbd>=</kbd> to write a formula. Examples:</p>
+          <ul>
+            <li><code>=SUM(A1:A10)</code> &mdash; Add up a range</li>
+            <li><code>=AVERAGE(B1:B5)</code> &mdash; Average of cells</li>
+            <li><code>=TODAY()</code> &mdash; Current date</li>
+            <li><code>=NOW()</code> &mdash; Current date &amp; time</li>
+            <li><code>=IF(A1>10, "High", "Low")</code> &mdash; Conditional logic</li>
+            <li><code>=VLOOKUP(A1, B1:C10, 2)</code> &mdash; Lookup values</li>
+          </ul>
+          <p><strong>Quick Formulas:</strong> Select a range of cells, right-click, and choose <em>Quick Formula</em> to instantly apply SUM, AVERAGE, COUNT, etc. Then click any cell to place the result.</p>
+          <p><strong>Click to reference:</strong> While typing a formula, click any cell to insert its reference automatically.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>Dates &amp; Deadlines</h3>
+          <p>Right-click a cell to access date features:</p>
+          <ul>
+            <li><strong>Insert Today's Date</strong> &mdash; Inserts <code>=TODAY()</code> which always shows the current date</li>
+            <li><strong>Pick a Date...</strong> &mdash; Opens a calendar to choose a specific date</li>
+            <li><strong>Toggle Deadline</strong> &mdash; Marks a date cell as a deadline. The cell will change color automatically:</li>
+          </ul>
+          <div class="help-colors">
+            <span class="help-color" style="background:#2ed573;color:#1a1a2e">2+ weeks</span>
+            <span class="help-color" style="background:#7bed9f;color:#1a1a2e">1-2 weeks</span>
+            <span class="help-color" style="background:#fdcb6e;color:#1a1a2e">6-7 days</span>
+            <span class="help-color" style="background:#ffa502;color:#1a1a2e">3-5 days</span>
+            <span class="help-color" style="background:#ff7f50;color:#fff">1-2 days</span>
+            <span class="help-color" style="background:#ff6348;color:#fff">Today</span>
+            <span class="help-color" style="background:#ff4757;color:#fff">Overdue</span>
+          </div>
+          <p>You'll also get <strong>browser notifications</strong> when a deadline is within 2 days or overdue. Make sure to allow notifications when prompted.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>Saving &amp; Opening Files</h3>
+          <ul>
+            <li><strong>Save</strong> (<kbd>Ctrl+S</kbd>) &mdash; Downloads a <code>.qx</code> file (native format, keeps all formatting &amp; formulas)</li>
+            <li><strong>Open</strong> (<kbd>Ctrl+O</kbd>) &mdash; Open <code>.qx</code>, <code>.csv</code>, <code>.xlsx</code>, or <code>.xls</code> files</li>
+            <li><strong>Export CSV</strong> &mdash; Download as CSV (current sheet only)</li>
+            <li><strong>Export Excel</strong> &mdash; Download as <code>.xlsx</code> with formulas preserved</li>
+          </ul>
+          <p>Your work is also <strong>auto-saved</strong> to your browser, so it persists between sessions.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>Install as Desktop App</h3>
+          <p>You can install Anomaly Quantix as a standalone app so files open directly in it:</p>
+          <ol>
+            <li>Open this site in <strong>Chrome</strong> or <strong>Edge</strong></li>
+            <li>Click the <strong>install icon</strong> in the address bar (or Menu &rarr; "Install Anomaly Quantix")</li>
+            <li>Once installed, right-click any <code>.qx</code> file &rarr; <strong>Open with</strong> &rarr; <strong>Anomaly Quantix</strong></li>
+            <li>To make it the default: right-click a <code>.qx</code> file &rarr; <strong>Properties</strong> &rarr; <strong>Opens with: Change</strong> &rarr; select Anomaly Quantix</li>
+          </ol>
+        </div>
+
+        <div class="help-section">
+          <h3>Other Features</h3>
+          <ul>
+            <li><strong>Formatting:</strong> Bold, italic, underline, text/fill colors, alignment</li>
+            <li><strong>Cell merging:</strong> Select cells and use the merge button in the toolbar</li>
+            <li><strong>Charts:</strong> Select data and click Chart to create bar, line, or pie charts</li>
+            <li><strong>Conditional formatting:</strong> Right-click &rarr; Conditional Format to highlight cells by rules</li>
+            <li><strong>Data validation:</strong> Right-click &rarr; Data Validation for dropdowns or number ranges</li>
+            <li><strong>Find &amp; Replace:</strong> <kbd>Ctrl+F</kbd> to find, <kbd>Ctrl+H</kbd> to replace</li>
+            <li><strong>Sort:</strong> Right-click a column &rarr; Sort A&rarr;Z or Z&rarr;A</li>
+            <li><strong>Freeze panes:</strong> Right-click &rarr; Freeze Above &amp; Left</li>
+            <li><strong>Multiple sheets:</strong> Click <strong>+</strong> at the bottom to add sheets, double-click to rename</li>
+            <li><strong>Smart Format:</strong> Auto-detects and formats your data (numbers, dates, currencies)</li>
+            <li><strong>Templates:</strong> Pre-built spreadsheet layouts to get started quickly</li>
+          </ul>
+        </div>
+
       </div>
     </div>
   </div>
