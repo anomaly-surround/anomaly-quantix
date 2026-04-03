@@ -1621,6 +1621,32 @@ tr.row-dragging {
 
   /* Floating charts */
   .floating-chart { width: 90vw !important; }
+
+  /* Pro button */
+  .pro-btn { padding: 4px 8px; font-size: 10px; }
+
+  /* Pro modal */
+  .pro-features { max-width: 100%; }
+  .pro-feature { font-size: 12px; padding: 6px 0; }
+  .pro-checkout { padding: 10px 30px; font-size: 14px; }
+  .pro-activate { flex-direction: column; max-width: 100%; }
+  .pro-activate input { width: 100%; }
+  .google-btn { width: 100%; justify-content: center; font-size: 13px; padding: 10px; }
+  .pro-divider span { font-size: 11px; }
+
+  /* Confirmation modal */
+  .confirm-activate { flex-direction: column; max-width: 100%; }
+  .confirm-activate input { width: 100%; }
+  .confirm-steps { max-width: 100%; }
+  .confirm-step { gap: 8px; }
+
+  /* Help modal */
+  .help-body { max-height: 65vh; }
+
+  /* Hide button text labels on mobile, icons only */
+  .file-buttons button { max-width: 32px; }
+  .file-buttons button svg + br,
+  .file-buttons button svg ~ * { display: none; }
 }
 
 @media (max-width: 400px) {
@@ -1629,4 +1655,7 @@ tr.row-dragging {
   #file-name { width: 100%; }
 
   .file-buttons { width: 100%; }
+
+  .pro-btn { padding: 3px 6px; font-size: 9px; }
+  .pro-amount { font-size: 28px; }
 }
