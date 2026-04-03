@@ -4262,7 +4262,7 @@ if ('launchQueue' in window) {
 
 // CONFIGURE
 const PRO_CHECKOUT_URL = 'https://aanomaly.lemonsqueezy.com/checkout/buy/c37c05a0-89a5-47a5-a1e6-bf90310f5090';
-const WORKER_URL = 'https://quantix-pro.YOUR_SUBDOMAIN.workers.dev'; // CONFIGURE: Set your worker URL
+const WORKER_URL = 'https://quantix-pro.xpropics.workers.dev';
 
 function isPro() {
   const data = localStorage.getItem('quantix-pro');
