@@ -3154,3 +3154,41 @@ function showAutoOrganizeToast(changes) {
 // ============================================
 
 init();
+
+// PWA & File Handling
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+
+if ('launchQueue' in window) {
+  window.launchQueue.setConsumer(async (launchParams) => {
+    if (!launchParams.files || !launchParams.files.length) return;
+    const fileHandle = launchParams.files[0];
+    const file = await fileHandle.getFile();
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    if (ext === 'xlsx' || ext === 'xls') {
+      const buf = await file.arrayBuffer();
+      importExcel(buf);
+    } else if (ext === 'csv') {
+      const text = await file.text();
+      importCSV(text);
+    } else {
+      const text = await file.text();
+      try {
+        const data = JSON.parse(text);
+        if (!data.sheets || !Array.isArray(data.sheets)) throw new Error('Invalid file');
+        sheets = data.sheets.map(s => sanitizeSheetData(s));
+        activeSheet = Math.max(0, Math.min(toNum(data.activeSheet || 0), sheets.length - 1));
+        document.getElementById('file-name').value = escapeHTML(String(data.fileName || file.name.replace('.qx', '')));
+        renderSheetTabs();
+        renderSheet();
+        selectCell(0, 0);
+      } catch (err) {
+        alert('Failed to load file: ' + err.message);
+      }
+    }
+    document.getElementById('file-name').value = file.name.replace(/\.\w+$/, '');
+    document.getElementById('status-info').textContent = 'Loaded: ' + file.name;
+  });
+}

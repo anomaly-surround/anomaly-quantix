@@ -1,0 +1,33 @@
+{
+  "name": "Anomaly Quantix",
+  "short_name": "Quantix",
+  "description": "Spreadsheet app by Anomaly",
+  "start_url": "/anomaly-quantix/",
+  "scope": "/anomaly-quantix/",
+  "display": "standalone",
+  "background_color": "#0f0f1a",
+  "theme_color": "#0f0f1a",
+  "icons": [
+    {
+      "src": "icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/anomaly-quantix/",
+      "accept": {
+        "application/json": [".qx"],
+        "text/csv": [".csv"],
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
+        "application/vnd.ms-excel": [".xls"]
+      }
+    }
+  ]
+}
