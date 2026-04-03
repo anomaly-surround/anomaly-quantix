@@ -4392,7 +4392,18 @@ function updateAutocompleteHighlight() {
 // ============================================
 
 loadTheme();
-init();
+
+// Landing page logic
+function launchApp() {
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  init();
+}
+
+// Skip landing if returning user (has autosave data) or opened via file handler
+if (localStorage.getItem('quantix-autosave') || window.location.search.includes('token=')) {
+  launchApp();
+}
 
 // PWA & File Handling
 if ('serviceWorker' in navigator) {

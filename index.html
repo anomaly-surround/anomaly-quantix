@@ -3,7 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Anomaly Quantix</title>
+  <title>Anomaly Quantix — Free Online Spreadsheet App</title>
+  <meta name="description" content="A powerful, free browser-based spreadsheet app. No sign-up required. Works offline. Formulas, charts, formatting, templates, and more. Your data stays on your device.">
+  <meta name="keywords" content="spreadsheet, online spreadsheet, free excel alternative, browser spreadsheet, offline spreadsheet, csv editor, xlsx editor">
+  <meta name="author" content="Anomaly">
+
+  <!-- Open Graph / Social -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Anomaly Quantix — Free Online Spreadsheet">
+  <meta property="og:description" content="A powerful spreadsheet app that runs in your browser. No sign-up, no cloud, your data stays private. Formulas, charts, themes, and more.">
+  <meta property="og:image" content="https://anomaly-surround.github.io/anomaly-quantix/og-image.png">
+  <meta property="og:url" content="https://anomaly-surround.github.io/anomaly-quantix/">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Anomaly Quantix — Free Online Spreadsheet">
+  <meta name="twitter:description" content="Powerful spreadsheet in your browser. No sign-up, works offline, data stays private.">
+  <meta name="twitter:image" content="https://anomaly-surround.github.io/anomaly-quantix/og-image.png">
+
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0f0f1a">
   <link rel="icon" type="image/svg+xml" href="icon-192.svg">
@@ -12,7 +29,63 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-  <div id="app">
+  <!-- Landing Page -->
+  <div id="landing">
+    <div class="landing-content">
+      <div class="landing-hero">
+        <img src="icon-192.svg" alt="Anomaly Quantix" class="landing-logo">
+        <h1>Anomaly Quantix</h1>
+        <p class="landing-tagline">A powerful spreadsheet that lives in your browser</p>
+        <button class="landing-cta" onclick="launchApp()">Launch App</button>
+        <p class="landing-sub">No sign-up required. Free to use. Your data stays on your device.</p>
+      </div>
+
+      <div class="landing-features">
+        <div class="landing-feature">
+          <div class="landing-feature-icon">fx</div>
+          <h3>50+ Formulas</h3>
+          <p>SUM, VLOOKUP, IF, and many more. Build complex calculations with ease.</p>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon">&#9783;</div>
+          <h3>Charts</h3>
+          <p>Bar, line, and pie charts anchored right on your sheet.</p>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon">&#128274;</div>
+          <h3>100% Private</h3>
+          <p>Everything runs locally. No servers, no tracking, no data collection.</p>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon">&#9889;</div>
+          <h3>Works Offline</h3>
+          <p>Install as a desktop app. Use it anywhere, even without internet.</p>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon">&#128197;</div>
+          <h3>Deadlines</h3>
+          <p>Set date deadlines with auto color-coding and browser notifications.</p>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon">&#128462;</div>
+          <h3>Import & Export</h3>
+          <p>Open and export CSV, Excel (.xlsx), with formulas preserved.</p>
+        </div>
+      </div>
+
+      <div class="landing-bottom">
+        <button class="landing-cta" onclick="launchApp()">Start Using Anomaly Quantix</button>
+        <div class="landing-badges">
+          <span>Free</span>
+          <span>No Sign-up</span>
+          <span>Offline Ready</span>
+          <span>Open Source</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="app" style="display:none">
     <!-- Top Bar -->
     <header class="top-bar">
       <div class="brand">
