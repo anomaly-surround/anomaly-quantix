@@ -4320,13 +4320,18 @@ function showProModal() {
       <div class="pro-status" style="border-color:var(--border)">
         <h3>Signed in as</h3>
         <p>${escapeHTML(data.email)}</p>
+        <button class="btn-primary" onclick="signOut()" style="background:var(--danger);margin-top:8px;font-size:11px;padding:5px 12px">Sign Out</button>
       </div>
     `;
     upgradeSection.style.display = '';
+    document.getElementById('google-signin-btn').style.display = 'none';
+    document.getElementById('google-signin-divider').style.display = 'none';
     document.getElementById('license-error').textContent = '';
   } else {
     statusSection.innerHTML = '';
     upgradeSection.style.display = '';
+    document.getElementById('google-signin-btn').style.display = '';
+    document.getElementById('google-signin-divider').style.display = '';
     document.getElementById('license-error').textContent = '';
   }
 
