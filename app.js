@@ -62,6 +62,7 @@ function init() {
   }
   checkDeadlines();
   setInterval(checkDeadlines, 60000); // check every minute
+  updateProUI();
 }
 
 // ============================================
@@ -1949,6 +1950,11 @@ function switchSheet(index) {
 }
 
 function addSheet() {
+  if (!isPro() && sheets.length >= FREE_MAX_SHEETS) {
+    showProModal();
+    document.getElementById('status-info').textContent = 'Free plan: max 3 sheets. Upgrade to Pro for unlimited.';
+    return;
+  }
   sheets.push(createSheetData('Sheet ' + (sheets.length + 1)));
   switchSheet(sheets.length - 1);
 }
@@ -2163,6 +2169,14 @@ function exportExcel() {
           }
         }
       }
+    }
+
+    // Free users: add branding row
+    if (!isPro()) {
+      const brandRow = maxR + 2;
+      const addr = XLSX.utils.encode_cell({ r: brandRow, c: 0 });
+      ws[addr] = { t: 's', v: 'Created with Anomaly Quantix - anomaly-surround.github.io/anomaly-quantix' };
+      ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: brandRow, c: maxC } });
     }
 
     XLSX.utils.book_append_sheet(wb, ws, sheet.name);
@@ -3895,7 +3909,19 @@ function hideCommentTooltip() {
 function printSheet() {
   const fileName = document.getElementById('file-name').value || 'Spreadsheet';
   document.body.setAttribute('data-print-title', fileName);
+
+  // Free users: add print watermark
+  let watermark = null;
+  if (!isPro()) {
+    watermark = document.createElement('div');
+    watermark.className = 'print-watermark';
+    watermark.textContent = 'Created with Anomaly Quantix - anomaly-surround.github.io/anomaly-quantix';
+    document.body.appendChild(watermark);
+  }
+
   window.print();
+
+  if (watermark) watermark.remove();
 }
 
 // ============================================
@@ -4227,3 +4253,136 @@ if ('launchQueue' in window) {
     document.getElementById('status-info').textContent = 'Loaded: ' + file.name;
   });
 }
+
+// ============================================
+// Pro / Freemium
+// ============================================
+
+// CONFIGURE: Set your LemonSqueezy checkout URL here
+const PRO_CHECKOUT_URL = 'https://anomalyquantix.lemonsqueezy.com/buy/YOUR_PRODUCT_ID';
+// CONFIGURE: Set your LemonSqueezy API key for license validation (or use a worker proxy)
+const LICENSE_VALIDATE_URL = 'https://api.lemonsqueezy.com/v1/licenses/validate';
+
+function isPro() {
+  const data = localStorage.getItem('quantix-pro');
+  if (!data) return false;
+  try {
+    const pro = JSON.parse(data);
+    return pro && pro.activated === true && pro.key;
+  } catch { return false; }
+}
+
+function getProData() {
+  try { return JSON.parse(localStorage.getItem('quantix-pro')) || null; } catch { return null; }
+}
+
+function updateProUI() {
+  const btn = document.getElementById('pro-btn');
+  const label = document.getElementById('pro-btn-label');
+  if (isPro()) {
+    btn.classList.add('is-pro');
+    label.textContent = 'Pro';
+  } else {
+    btn.classList.remove('is-pro');
+    label.textContent = 'Upgrade to Pro';
+  }
+}
+
+function showProModal() {
+  const modal = document.getElementById('pro-modal');
+  const statusSection = document.getElementById('pro-status-section');
+  const upgradeSection = document.getElementById('pro-upgrade-section');
+
+  if (isPro()) {
+    const data = getProData();
+    statusSection.innerHTML = `
+      <div class="pro-status">
+        <h3>Pro Activated</h3>
+        <p>License: ${escapeHTML(data.key.substring(0, 8))}...${escapeHTML(data.key.slice(-4))}</p>
+        <p style="margin-top:8px">Thank you for supporting Anomaly Quantix!</p>
+      </div>
+      <button class="btn-primary" onclick="deactivatePro()" style="background:var(--danger)">Deactivate License</button>
+    `;
+    upgradeSection.style.display = 'none';
+  } else {
+    statusSection.innerHTML = '';
+    upgradeSection.style.display = '';
+    document.getElementById('license-error').textContent = '';
+  }
+
+  modal.style.display = 'flex';
+}
+
+function handleCheckout() {
+  if (PRO_CHECKOUT_URL.includes('YOUR_PRODUCT_ID')) {
+    alert('Checkout not configured yet. Please set up your LemonSqueezy product.');
+    return;
+  }
+  window.open(PRO_CHECKOUT_URL, '_blank');
+}
+
+async function activateLicense() {
+  const input = document.getElementById('license-key-input');
+  const error = document.getElementById('license-error');
+  const key = input.value.trim();
+
+  if (!key) { error.textContent = 'Please enter a license key.'; return; }
+
+  error.textContent = 'Validating...';
+  error.style.color = 'var(--text-dim)';
+
+  try {
+    const res = await fetch(LICENSE_VALIDATE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ license_key: key })
+    });
+
+    const data = await res.json();
+
+    if (data.valid || data.license_key?.status === 'active') {
+      localStorage.setItem('quantix-pro', JSON.stringify({
+        activated: true,
+        key: key,
+        activatedAt: Date.now()
+      }));
+      updateProUI();
+      document.getElementById('pro-modal').style.display = 'none';
+      document.getElementById('status-info').textContent = 'Pro activated! Thank you!';
+    } else {
+      error.style.color = 'var(--danger)';
+      error.textContent = 'Invalid or expired license key.';
+    }
+  } catch (err) {
+    // If API call fails (CORS etc.), do offline activation with basic format check
+    if (/^[A-Z0-9]{8}-[A-Z0-9]{8}-[A-Z0-9]{8}-[A-Z0-9]{8}$/i.test(key)) {
+      localStorage.setItem('quantix-pro', JSON.stringify({
+        activated: true,
+        key: key,
+        activatedAt: Date.now()
+      }));
+      updateProUI();
+      document.getElementById('pro-modal').style.display = 'none';
+      document.getElementById('status-info').textContent = 'Pro activated! Thank you!';
+    } else {
+      error.style.color = 'var(--danger)';
+      error.textContent = 'Invalid license key format.';
+    }
+  }
+}
+
+function deactivatePro() {
+  if (confirm('Are you sure you want to deactivate your Pro license?')) {
+    localStorage.removeItem('quantix-pro');
+    updateProUI();
+    document.getElementById('pro-modal').style.display = 'none';
+    document.getElementById('status-info').textContent = 'Pro deactivated.';
+  }
+}
+
+// Feature gating
+const FREE_MAX_SHEETS = 3;
+
+// Override addSheet to enforce limit
+const _originalAddSheet = typeof addSheet === 'function' ? addSheet : null;
+

@@ -17,6 +17,9 @@
         <span class="logo">Q</span>
         <span class="brand-name">Anomaly Quantix</span>
       </div>
+      <button class="pro-btn" id="pro-btn" onclick="showProModal()">
+        <span id="pro-btn-label">Upgrade to Pro</span>
+      </button>
       <div class="file-controls">
         <input type="text" id="file-name" value="Untitled Spreadsheet" spellcheck="false">
         <div class="file-buttons">
@@ -500,6 +503,43 @@
           </ul>
         </div>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- Pro Modal -->
+  <div class="modal-overlay" id="pro-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Anomaly Quantix Pro</h2>
+        <button onclick="document.getElementById('pro-modal').style.display='none'">&times;</button>
+      </div>
+      <div class="modal-body pro-body">
+        <div id="pro-status-section"></div>
+
+        <div id="pro-upgrade-section">
+          <div class="pro-price">
+            <span class="pro-amount">$4.99</span>
+            <span class="pro-period">one-time payment</span>
+          </div>
+
+          <div class="pro-features">
+            <div class="pro-feature"><span class="pro-check">&#10003;</span> Unlimited sheets (free: max 3)</div>
+            <div class="pro-feature"><span class="pro-check">&#10003;</span> Clean Excel exports (no branding)</div>
+            <div class="pro-feature"><span class="pro-check">&#10003;</span> Clean printing (no watermark)</div>
+            <div class="pro-feature"><span class="pro-check">&#10003;</span> Support the developer</div>
+          </div>
+
+          <a id="pro-checkout-btn" class="btn-primary pro-checkout" href="#" target="_blank" onclick="handleCheckout()">Get Pro</a>
+
+          <div class="pro-divider"><span>Already purchased?</span></div>
+
+          <div class="pro-activate">
+            <input type="text" id="license-key-input" placeholder="Enter your license key" spellcheck="false">
+            <button class="btn-primary" onclick="activateLicense()">Activate</button>
+          </div>
+          <p id="license-error" class="pro-error"></p>
+        </div>
       </div>
     </div>
   </div>
