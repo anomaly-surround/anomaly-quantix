@@ -205,6 +205,14 @@ function attachCellEvents() {
     const row = +td.dataset.row;
     const col = +td.dataset.col;
 
+    // If picking a cell for quick formula, place it
+    if (pendingFormula) {
+      e.preventDefault();
+      e.stopPropagation();
+      placePendingFormula(row, col);
+      return;
+    }
+
     // If editing a formula, clicking another cell inserts its reference
     if (editingCell) {
       const editTd = getCellTd(editingCell.row, editingCell.col);
@@ -1239,6 +1247,9 @@ document.addEventListener('keydown', (e) => {
   const ae = document.activeElement;
   if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA') && !ae.classList.contains('cell-input')) return;
 
+  // Cancel pending formula pick
+  if (pendingFormula && e.key === 'Escape') { cancelPendingFormula(); return; }
+
   // If editing, let the input handle it
   if (editingCell) {
     if (e.key === 'Enter') { e.preventDefault(); commitEdit(); moveSelection(1, 0); }
@@ -1463,32 +1474,10 @@ function getRangeRef() {
   return COL_LETTERS[c1] + (r1 + 1) + ':' + COL_LETTERS[c2] + (r2 + 1);
 }
 
+let pendingFormula = null;
+
 function quickFormula(func, rangeRef) {
-  // Find the cell right below or to the right of the selection to put the result
-  const r1 = Math.min(selectionRange.startRow, selectionRange.endRow);
-  const r2 = Math.max(selectionRange.startRow, selectionRange.endRow);
-  const c1 = Math.min(selectionRange.startCol, selectionRange.endCol);
-  const c2 = Math.max(selectionRange.startCol, selectionRange.endCol);
-
-  let targetRow, targetCol;
-
-  // If vertical range (single column), put result below
-  if (c1 === c2) {
-    targetRow = r2 + 1;
-    targetCol = c1;
-  }
-  // If horizontal range (single row), put result to the right
-  else if (r1 === r2) {
-    targetRow = r1;
-    targetCol = c2 + 1;
-  }
-  // Multi-row multi-col: put result below-left
-  else {
-    targetRow = r2 + 1;
-    targetCol = c1;
-  }
-
-  // For COUNTIF/SUMIF, prompt for criteria
+  // For COUNTIF/SUMIF, prompt for criteria first
   let formula;
   if (func === 'COUNTIF') {
     const criteria = prompt('Count cells where value:', '>0');
@@ -1502,9 +1491,27 @@ function quickFormula(func, rangeRef) {
     formula = `=${func}(${rangeRef})`;
   }
 
-  selectCell(targetRow, targetCol);
-  setCellValue(targetRow, targetCol, formula);
-  document.getElementById('status-info').textContent = `${func} inserted at ${COL_LETTERS[targetCol]}${targetRow + 1}`;
+  // Enter "pick cell" mode
+  pendingFormula = { formula, func };
+  document.getElementById('status-info').textContent = `Click a cell to place ${func} result (Esc to cancel)`;
+  document.getElementById('sheet-container').classList.add('picking-cell');
+}
+
+function placePendingFormula(row, col) {
+  if (!pendingFormula) return;
+  const { formula, func } = pendingFormula;
+  pendingFormula = null;
+  document.getElementById('sheet-container').classList.remove('picking-cell');
+  selectCell(row, col);
+  setCellValue(row, col, formula);
+  document.getElementById('status-info').textContent = `${func} inserted at ${COL_LETTERS[col]}${row + 1}`;
+}
+
+function cancelPendingFormula() {
+  if (!pendingFormula) return;
+  pendingFormula = null;
+  document.getElementById('sheet-container').classList.remove('picking-cell');
+  document.getElementById('status-info').textContent = 'Ready';
 }
 
 function toggleSubmenu(e) {

@@ -389,6 +389,10 @@ body {
   transition: outline 0.15s, background-color 0.15s;
 }
 
+/* Picking cell mode for quick formula */
+.sheet-container.picking-cell { cursor: crosshair; }
+.sheet-container.picking-cell .cell { cursor: crosshair; }
+
 /* Data type styling */
 .cell[data-type="number"], .cell[data-type="currency"], .cell[data-type="percent"] {
   justify-content: flex-end;
