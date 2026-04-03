@@ -1876,8 +1876,30 @@ function cancelPendingFormula() {
 
 function toggleSubmenu(e) {
   e.stopPropagation();
-  const submenu = e.target.nextElementSibling;
+  const trigger = e.target;
+  const submenu = trigger.nextElementSibling;
   submenu.classList.toggle('show');
+
+  if (submenu.classList.contains('show')) {
+    const triggerRect = trigger.getBoundingClientRect();
+    // Try to open to the right
+    let left = triggerRect.right + 2;
+    let top = triggerRect.top;
+
+    // If it would go off-screen right, open to the left
+    submenu.style.left = left + 'px';
+    submenu.style.top = top + 'px';
+
+    const subRect = submenu.getBoundingClientRect();
+    if (subRect.right > window.innerWidth) {
+      left = triggerRect.left - subRect.width - 2;
+    }
+    if (subRect.bottom > window.innerHeight) {
+      top = window.innerHeight - subRect.height - 5;
+    }
+    submenu.style.left = Math.max(5, left) + 'px';
+    submenu.style.top = Math.max(5, top) + 'px';
+  }
 }
 
 function removeContextMenu() {
