@@ -1492,29 +1492,39 @@ tr.row-dragging {
 
   .brand-name { display: none; }
 
+  .file-controls {
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+  }
+
   #file-name {
-    width: 120px;
+    width: 100%;
     font-size: 13px;
     padding: 3px 6px;
   }
 
   .file-buttons {
-    flex-wrap: wrap;
-    gap: 2px;
+    flex-wrap: nowrap;
+    gap: 3px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
   }
 
+  .file-buttons::-webkit-scrollbar { display: none; }
+
+  /* Icon-only buttons on mobile */
   .file-buttons button {
-    padding: 5px 6px;
-    font-size: 11px;
+    padding: 6px 8px;
+    font-size: 0;
+    flex-shrink: 0;
+    min-width: 34px;
+    justify-content: center;
   }
 
-  .file-buttons button svg { width: 14px; height: 14px; }
-
-  /* Hide button text on mobile, keep icons */
-  .file-buttons button {
-    gap: 0;
-    overflow: hidden;
-  }
+  .file-buttons button svg { width: 16px; height: 16px; }
 
   /* Toolbar: scrollable */
   .toolbar {
@@ -1643,19 +1653,11 @@ tr.row-dragging {
   /* Help modal */
   .help-body { max-height: 65vh; }
 
-  /* Hide button text labels on mobile, icons only */
-  .file-buttons button { max-width: 32px; }
-  .file-buttons button svg + br,
-  .file-buttons button svg ~ * { display: none; }
+  /* Top bar layout */
+  .top-bar { flex-wrap: nowrap; }
 }
 
 @media (max-width: 400px) {
-  .file-controls { flex-direction: column; align-items: flex-start; gap: 4px; }
-
-  #file-name { width: 100%; }
-
-  .file-buttons { width: 100%; }
-
   .pro-btn { padding: 3px 6px; font-size: 9px; }
   .pro-amount { font-size: 28px; }
 }
