@@ -4259,7 +4259,7 @@ if ('launchQueue' in window) {
 // ============================================
 
 // CONFIGURE: Set your LemonSqueezy checkout URL here
-const PRO_CHECKOUT_URL = 'https://anomalyquantix.lemonsqueezy.com/buy/YOUR_PRODUCT_ID';
+const PRO_CHECKOUT_URL = 'https://aanomaly.lemonsqueezy.com/checkout/buy/c37c05a0-89a5-47a5-a1e6-bf90310f5090';
 // CONFIGURE: Set your LemonSqueezy API key for license validation (or use a worker proxy)
 const LICENSE_VALIDATE_URL = 'https://api.lemonsqueezy.com/v1/licenses/validate';
 
