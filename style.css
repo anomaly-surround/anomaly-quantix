@@ -389,6 +389,45 @@ body {
   transition: outline 0.15s, background-color 0.15s;
 }
 
+/* Date picker popup */
+.date-picker-popup {
+  position: fixed;
+  z-index: 200;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+.date-picker-popup input[type="date"] {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+  color-scheme: dark;
+}
+
+.date-picker-popup input[type="date"]:focus { border-color: var(--accent); }
+
+.date-picker-popup button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.date-picker-popup button:hover { background: var(--bg-hover); color: var(--text); }
+
 /* Picking cell mode for quick formula */
 .sheet-container.picking-cell { cursor: crosshair; }
 .sheet-container.picking-cell .cell { cursor: crosshair; }

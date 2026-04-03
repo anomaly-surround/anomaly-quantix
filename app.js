@@ -54,6 +54,13 @@ function init() {
       }
     } catch (e) { /* ignore */ }
   }
+
+  // Request notification permission and start deadline checker
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+  checkDeadlines();
+  setInterval(checkDeadlines, 60000); // check every minute
 }
 
 // ============================================
@@ -1137,11 +1144,21 @@ function getCellStyle(cell) {
   if (cell.bold) parts.push('font-weight:700');
   if (cell.italic) parts.push('font-style:italic');
   if (cell.underline) parts.push('text-decoration:underline');
-  const tc = sanitizeColor(cell.textColor);
-  if (tc) parts.push(`color:${tc}`);
-  const cc = sanitizeColor(cell._condColor);
-  if (cc) parts.push(`background:${cc}33;border-left:3px solid ${cc}`);
-  else { const fc = sanitizeColor(cell.fillColor); if (fc && fc !== '#1a1a2e') parts.push(`background:${fc}`); }
+
+  // Deadline coloring takes priority
+  const dl = getDeadlineColor(cell);
+  if (dl) {
+    parts.push(`background:${dl.bg}`);
+    parts.push(`color:${dl.text}`);
+    parts.push(`border-left:3px solid ${dl.border}`);
+  } else {
+    const tc = sanitizeColor(cell.textColor);
+    if (tc) parts.push(`color:${tc}`);
+    const cc = sanitizeColor(cell._condColor);
+    if (cc) parts.push(`background:${cc}33;border-left:3px solid ${cc}`);
+    else { const fc = sanitizeColor(cell.fillColor); if (fc && fc !== '#1a1a2e') parts.push(`background:${fc}`); }
+  }
+
   if (cell.align && /^(left|center|right)$/.test(cell.align)) parts.push(`justify-content:${cell.align === 'left' ? 'flex-start' : cell.align === 'right' ? 'flex-end' : 'center'}`);
   return parts.join(';');
 }
@@ -1440,6 +1457,11 @@ function showContextMenu(x, y, row, col) {
 
   html += `
     <div class="separator"></div>
+    <button onclick="insertToday(${row}, ${col});removeContextMenu()">Insert Today's Date</button>
+    <button onclick="showDatePicker(${row}, ${col});removeContextMenu()">Pick a Date...</button>
+    <div class="separator"></div>
+    <button onclick="toggleDeadline(${row}, ${col});removeContextMenu()">Toggle Deadline</button>
+    <div class="separator"></div>
     <button onclick="insertRowAbove(${row});removeContextMenu()">Insert Row Above</button>
     <button onclick="insertRowBelow(${row});removeContextMenu()">Insert Row Below</button>
     <div class="separator"></div>
@@ -1472,6 +1494,145 @@ function getRangeRef() {
   const c1 = Math.min(selectionRange.startCol, selectionRange.endCol);
   const c2 = Math.max(selectionRange.startCol, selectionRange.endCol);
   return COL_LETTERS[c1] + (r1 + 1) + ':' + COL_LETTERS[c2] + (r2 + 1);
+}
+
+function toggleDeadline(row, col) {
+  const key = cellKey(row, col);
+  if (!sheets[activeSheet].cells[key]) sheets[activeSheet].cells[key] = {};
+  const cell = sheets[activeSheet].cells[key];
+  cell.deadline = !cell.deadline;
+  if (cell.deadline) {
+    document.getElementById('status-info').textContent = `Deadline set on ${COL_LETTERS[col]}${row + 1}`;
+  } else {
+    document.getElementById('status-info').textContent = `Deadline removed from ${COL_LETTERS[col]}${row + 1}`;
+  }
+  renderSheet();
+  selectCell(row, col);
+  triggerAutoSave();
+}
+
+function getDeadlineColor(cell) {
+  if (!cell || !cell.deadline) return null;
+
+  // Get the display value (resolve formula if needed)
+  const val = cell.formula ? getDisplayValue(cell) : (cell.value ?? '');
+  const dateVal = new Date(val);
+  if (isNaN(dateVal.getTime())) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  dateVal.setHours(0, 0, 0, 0);
+  const daysLeft = Math.round((dateVal - today) / (1000 * 60 * 60 * 24));
+
+  if (daysLeft < 0) return { bg: '#ff4757', text: '#fff', border: '#ff2234' };       // overdue - red
+  if (daysLeft === 0) return { bg: '#ff6348', text: '#fff', border: '#ff4520' };      // today - deep orange
+  if (daysLeft <= 2) return { bg: '#ff7f50', text: '#fff', border: '#ff6330' };       // 1-2 days - orange
+  if (daysLeft <= 5) return { bg: '#ffa502', text: '#1a1a2e', border: '#e89400' };    // 3-5 days - amber
+  if (daysLeft <= 7) return { bg: '#fdcb6e', text: '#1a1a2e', border: '#f0b830' };    // 6-7 days - yellow
+  if (daysLeft <= 14) return { bg: '#7bed9f', text: '#1a1a2e', border: '#55d97e' };   // 1-2 weeks - light green
+  return { bg: '#2ed573', text: '#1a1a2e', border: '#17b558' };                        // 2+ weeks - green
+}
+
+const notifiedDeadlines = new Set();
+
+function checkDeadlines() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  sheets.forEach((sheet, si) => {
+    for (const key of Object.keys(sheet.cells)) {
+      const cell = sheet.cells[key];
+      if (!cell || !cell.deadline) continue;
+
+      const val = cell.formula ? getDisplayValue(cell) : (cell.value ?? '');
+      const dateVal = new Date(val);
+      if (isNaN(dateVal.getTime())) continue;
+
+      dateVal.setHours(0, 0, 0, 0);
+      const daysLeft = Math.round((dateVal - today) / (1000 * 60 * 60 * 24));
+
+      // Only notify for overdue, today, or within 2 days
+      if (daysLeft > 2) continue;
+
+      // Don't re-notify the same cell on the same day
+      const notifKey = `${si}-${key}-${today.toDateString()}`;
+      if (notifiedDeadlines.has(notifKey)) continue;
+      notifiedDeadlines.add(notifKey);
+
+      const { row, col } = parseKey(key);
+      const cellRef = COL_LETTERS[col] + (row + 1);
+      let msg;
+      if (daysLeft < 0) msg = `Overdue by ${Math.abs(daysLeft)} day${Math.abs(daysLeft) > 1 ? 's' : ''}!`;
+      else if (daysLeft === 0) msg = `Due today!`;
+      else msg = `Due in ${daysLeft} day${daysLeft > 1 ? 's' : ''}`;
+
+      new Notification(`📅 Deadline: ${cellRef} (${sheet.name})`, {
+        body: `${val} — ${msg}`,
+        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%236c5ce7"/><text x="16" y="23" text-anchor="middle" fill="white" font-size="20" font-weight="800">Q</text></svg>'
+      });
+    }
+  });
+}
+
+function insertToday(row, col) {
+  selectCell(row, col);
+  setCellValue(row, col, '=TODAY()');
+  renderSheet();
+  selectCell(row, col);
+}
+
+function showDatePicker(row, col) {
+  // Remove any existing picker
+  document.querySelector('.date-picker-popup')?.remove();
+
+  const td = getCellTd(row, col);
+  const rect = td ? td.getBoundingClientRect() : { left: 100, bottom: 100 };
+
+  const picker = document.createElement('div');
+  picker.className = 'date-picker-popup';
+  picker.style.left = rect.left + 'px';
+  picker.style.top = rect.bottom + 4 + 'px';
+
+  const input = document.createElement('input');
+  input.type = 'date';
+  input.valueAsDate = new Date();
+  input.addEventListener('change', () => {
+    if (input.value) {
+      const parts = input.value.split('-');
+      const val = parseInt(parts[1]) + '/' + parseInt(parts[2]) + '/' + parts[0];
+      selectCell(row, col);
+      setCellValue(row, col, val);
+      const key = cellKey(row, col);
+      sheets[activeSheet].cells[key].detectedType = 'date';
+      renderSheet();
+      selectCell(row, col);
+    }
+    picker.remove();
+  });
+
+  const cancel = document.createElement('button');
+  cancel.textContent = 'Cancel';
+  cancel.onclick = () => picker.remove();
+
+  picker.appendChild(input);
+  picker.appendChild(cancel);
+  document.body.appendChild(picker);
+
+  // Adjust if off-screen
+  const pr = picker.getBoundingClientRect();
+  if (pr.right > window.innerWidth) picker.style.left = (window.innerWidth - pr.width - 10) + 'px';
+  if (pr.bottom > window.innerHeight) picker.style.top = (rect.top - pr.height - 4) + 'px';
+
+  input.showPicker?.();
+  input.focus();
+
+  setTimeout(() => {
+    document.addEventListener('mousedown', function handler(e) {
+      if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('mousedown', handler); }
+    });
+  }, 10);
 }
 
 let pendingFormula = null;
