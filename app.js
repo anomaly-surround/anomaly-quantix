@@ -4319,6 +4319,57 @@ function handleCheckout() {
     return;
   }
   window.open(PRO_CHECKOUT_URL, '_blank');
+  // Close pro modal and show confirmation after a short delay
+  document.getElementById('pro-modal').style.display = 'none';
+  setTimeout(() => {
+    document.getElementById('confirm-modal').style.display = 'flex';
+  }, 1000);
+}
+
+function activateFromConfirm() {
+  const input = document.getElementById('confirm-license-input');
+  const error = document.getElementById('confirm-license-error');
+  const key = input.value.trim();
+
+  if (!key) { error.textContent = 'Please enter a license key.'; return; }
+
+  error.textContent = 'Validating...';
+  error.style.color = 'var(--text-dim)';
+
+  // Reuse the same validation logic
+  fetch(LICENSE_VALIDATE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ license_key: key })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.valid || data.license_key?.status === 'active') {
+      proActivateSuccess(key);
+    } else {
+      error.style.color = 'var(--danger)';
+      error.textContent = 'Invalid or expired license key.';
+    }
+  })
+  .catch(() => {
+    if (/^[A-Z0-9]{8}-[A-Z0-9]{8}-[A-Z0-9]{8}-[A-Z0-9]{8}$/i.test(key)) {
+      proActivateSuccess(key);
+    } else {
+      error.style.color = 'var(--danger)';
+      error.textContent = 'Invalid license key format.';
+    }
+  });
+}
+
+function proActivateSuccess(key) {
+  localStorage.setItem('quantix-pro', JSON.stringify({
+    activated: true,
+    key: key,
+    activatedAt: Date.now()
+  }));
+  updateProUI();
+  document.getElementById('confirm-modal').style.display = 'none';
+  document.getElementById('status-info').textContent = 'Pro activated! Thank you!';
 }
 
 async function activateLicense() {

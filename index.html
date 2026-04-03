@@ -539,6 +539,52 @@
     </div>
   </div>
 
+  <!-- Purchase Confirmation Modal -->
+  <div class="modal-overlay" id="confirm-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Thank You!</h2>
+        <button onclick="document.getElementById('confirm-modal').style.display='none'">&times;</button>
+      </div>
+      <div class="modal-body confirm-body">
+        <div class="confirm-icon">&#10003;</div>
+        <h3 class="confirm-title">Your purchase was successful!</h3>
+        <p class="confirm-subtitle">Welcome to Anomaly Quantix Pro</p>
+
+        <div class="confirm-steps">
+          <div class="confirm-step">
+            <span class="step-num">1</span>
+            <div>
+              <strong>Check your email</strong>
+              <p>LemonSqueezy sent you a receipt with your license key</p>
+            </div>
+          </div>
+          <div class="confirm-step">
+            <span class="step-num">2</span>
+            <div>
+              <strong>Copy your license key</strong>
+              <p>It looks like: <code>XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX</code></p>
+            </div>
+          </div>
+          <div class="confirm-step">
+            <span class="step-num">3</span>
+            <div>
+              <strong>Activate below</strong>
+              <p>Paste your key and click Activate</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="confirm-activate">
+          <input type="text" id="confirm-license-input" placeholder="Paste your license key here" spellcheck="false">
+          <button class="btn-primary" onclick="activateFromConfirm()">Activate</button>
+        </div>
+        <p id="confirm-license-error" class="pro-error"></p>
+        <p class="confirm-note">You can also activate later from the <strong>Pro</strong> button in the top bar.</p>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
