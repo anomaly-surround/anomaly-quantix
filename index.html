@@ -380,11 +380,115 @@
         </div>
 
         <div class="help-section">
+          <h3>Auto-Fill</h3>
+          <p>Select a cell and notice the small <strong>square handle</strong> at the bottom-right corner. Drag it down or right to auto-fill adjacent cells.</p>
+          <ul>
+            <li><strong>Numbers:</strong> Detects patterns &mdash; 1, 2, 3 continues as 4, 5, 6. Also works with 2, 4, 6 &rarr; 8, 10, 12</li>
+            <li><strong>Text:</strong> Copies the value to each cell</li>
+            <li><strong>Formulas:</strong> Adjusts cell references automatically &mdash; <code>=A1+B1</code> becomes <code>=A2+B2</code> when dragged down</li>
+            <li><strong>Dates:</strong> Increments by one day</li>
+            <li><strong>Day/Month names:</strong> Mon, Tue, Wed... or Jan, Feb, Mar... continues the sequence</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>Column Filters</h3>
+          <p>Click the <strong>Filter</strong> button in the toolbar to enable filter mode.</p>
+          <ul>
+            <li>Small <strong>dropdown arrows</strong> appear on each column header</li>
+            <li>Click an arrow to see all unique values in that column with checkboxes</li>
+            <li>Uncheck values to <strong>hide rows</strong> containing them</li>
+            <li>Click <strong>Clear</strong> in the dropdown to remove the filter for that column</li>
+            <li>Click the Filter button again to turn off all filters</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>Cell Comments</h3>
+          <p>Add notes to any cell without changing its value:</p>
+          <ul>
+            <li>Right-click a cell &rarr; <strong>Add Comment...</strong></li>
+            <li>Cells with comments show a small <strong>red triangle</strong> in the top-right corner</li>
+            <li><strong>Hover</strong> over the cell to read the comment</li>
+            <li>Right-click again to <strong>Edit Comment</strong> or <strong>Delete Comment</strong></li>
+            <li>Comments are saved with your file</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>Print</h3>
+          <p>Click the <strong>Print</strong> button in the top bar to print your spreadsheet.</p>
+          <ul>
+            <li>The toolbar, formula bar, and other UI elements are automatically hidden</li>
+            <li>Cells are printed with a clean white background and black text</li>
+            <li>The file name is shown as the page header</li>
+            <li>You can also <strong>Save as PDF</strong> from the print dialog</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>Hide Rows &amp; Columns</h3>
+          <ul>
+            <li>Right-click a cell &rarr; <strong>Hide Row</strong> or <strong>Hide Column</strong></li>
+            <li>A <strong>double line</strong> indicator shows where rows or columns are hidden</li>
+            <li>To unhide: right-click a cell next to the hidden area &rarr; <strong>Unhide Adjacent Rows</strong> or <strong>Unhide Adjacent Columns</strong></li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>Drag &amp; Drop Rows</h3>
+          <p>Reorder rows by dragging:</p>
+          <ul>
+            <li>Click and <strong>hold</strong> on a row number (left side)</li>
+            <li>Drag up or down to the target position</li>
+            <li>Release to drop &mdash; the row and all its data will be moved</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>Theme Toggle</h3>
+          <p>Click the <strong>sun/moon icon</strong> in the toolbar to switch between dark and light mode. Your preference is saved automatically.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>Autocomplete</h3>
+          <p>When typing in a cell, the app suggests matching values from the same column:</p>
+          <ul>
+            <li>Type <strong>2 or more characters</strong> to see suggestions</li>
+            <li>Use <kbd>&uarr;</kbd> <kbd>&darr;</kbd> arrow keys to navigate suggestions</li>
+            <li>Press <kbd>Tab</kbd> or <kbd>Enter</kbd> to accept a suggestion</li>
+            <li>Press <kbd>Escape</kbd> to dismiss</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>Multi-Select</h3>
+          <p>Select scattered cells for formulas:</p>
+          <ul>
+            <li>Hold <kbd>Ctrl</kbd> and <strong>click</strong> individual cells to select multiple</li>
+            <li>Right-click &rarr; <strong>Quick Formula</strong> to apply SUM, AVERAGE, etc. across all selected cells</li>
+            <li>Click a cell to place the result</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>Charts</h3>
+          <p>Create visual charts from your data:</p>
+          <ul>
+            <li>Select your data range, then click <strong>Chart</strong> in the toolbar</li>
+            <li>Choose chart type: <strong>Bar</strong>, <strong>Line</strong>, or <strong>Pie</strong></li>
+            <li>Set the <strong>data range</strong> and <strong>title</strong></li>
+            <li><strong>Place at cells</strong> (e.g. <code>D1:I12</code>) to anchor the chart to the grid, or leave empty for a floating chart</li>
+            <li>Floating charts can be <strong>dragged</strong> and <strong>resized</strong></li>
+            <li>Click <strong>&#x21bb;</strong> to refresh chart data, <strong>&times;</strong> to remove</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
           <h3>Other Features</h3>
           <ul>
             <li><strong>Formatting:</strong> Bold, italic, underline, text/fill colors, alignment</li>
             <li><strong>Cell merging:</strong> Select cells and use the merge button in the toolbar</li>
-            <li><strong>Charts:</strong> Select data and click Chart to create bar, line, or pie charts</li>
             <li><strong>Conditional formatting:</strong> Right-click &rarr; Conditional Format to highlight cells by rules</li>
             <li><strong>Data validation:</strong> Right-click &rarr; Data Validation for dropdowns or number ranges</li>
             <li><strong>Find &amp; Replace:</strong> <kbd>Ctrl+F</kbd> to find, <kbd>Ctrl+H</kbd> to replace</li>
