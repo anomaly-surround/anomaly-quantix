@@ -241,8 +241,13 @@ function renderTemplates() {
 // Cell Events
 // ============================================
 
+let cellEventsAttached = false;
+
 function attachCellEvents() {
   const tbody = document.getElementById('sheet-body');
+
+  if (cellEventsAttached) return;
+  cellEventsAttached = true;
 
   tbody.addEventListener('mousedown', (e) => {
     const td = e.target.closest('td[data-row]');
@@ -250,6 +255,9 @@ function attachCellEvents() {
 
     const row = +td.dataset.row;
     const col = +td.dataset.col;
+
+    // Right-click: don't reset selection, let contextmenu handler deal with it
+    if (e.button === 2) return;
 
     // If picking a cell for quick formula, place it
     if (pendingFormula) {
@@ -281,9 +289,6 @@ function attachCellEvents() {
       insertAtCursor(formulaInput, ref);
       return;
     }
-
-    // Right-click: don't reset selection, let contextmenu handler deal with it
-    if (e.button === 2) return;
 
     // Block drag: if clicking inside an existing multi-cell selection, start block drag
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey && selectionRange && isInSelectionRange(row, col)) {
@@ -418,7 +423,11 @@ function attachFilterEvents() {
   });
 }
 
+let commentHoverAttached = false;
+
 function attachCommentHover() {
+  if (commentHoverAttached) return;
+  commentHoverAttached = true;
   const tbody = document.getElementById('sheet-body');
   tbody.addEventListener('mouseover', (e) => {
     const cellDiv = e.target.closest('.cell.has-comment');
@@ -2576,6 +2585,8 @@ function placeChartOnSheet(type, title, labels, datasets, rangeStr, targetStr) {
   wrapper.appendChild(header);
   wrapper.appendChild(canvas);
 
+  const chartAC = new AbortController();
+
   if (!anchorCells) {
     // Floating mode: add resize handle and drag/resize logic
     const resizeHandle = document.createElement('div');
@@ -2584,13 +2595,13 @@ function placeChartOnSheet(type, title, labels, datasets, rangeStr, targetStr) {
     wrapper.style.left = (container.scrollLeft + 60) + 'px';
     wrapper.style.top = (container.scrollTop + 30) + 'px';
 
-    setupDrag(wrapper, header);
-    setupResize(wrapper, canvas, resizeHandle, type, title, labels, datasets);
+    setupDrag(wrapper, header, chartAC);
+    setupResize(wrapper, canvas, resizeHandle, type, title, labels, datasets, chartAC);
   }
 
   container.appendChild(wrapper);
 
-  const chartData = { id, type, title, labels, datasets, rangeStr, wrapper, canvas, anchorCells };
+  const chartData = { id, type, title, labels, datasets, rangeStr, wrapper, canvas, anchorCells, ac: chartAC };
   sheetCharts.push(chartData);
 
   if (anchorCells) {
@@ -2662,19 +2673,20 @@ function repositionAllCharts() {
   });
 }
 
-function setupDrag(wrapper, header) {
+function setupDrag(wrapper, header, ac) {
   let dragging = false, dragX, dragY, startLeft, startTop;
   const onStart = (x, y) => { dragging = true; dragX = x; dragY = y; startLeft = wrapper.offsetLeft; startTop = wrapper.offsetTop; };
   header.addEventListener('mousedown', (e) => { onStart(e.clientX, e.clientY); e.preventDefault(); });
   header.addEventListener('touchstart', (e) => { onStart(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); });
   const onMove = (x, y) => { if (!dragging) return; wrapper.style.left = (startLeft + x - dragX) + 'px'; wrapper.style.top = (startTop + y - dragY) + 'px'; };
-  document.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
-  document.addEventListener('touchmove', (e) => onMove(e.touches[0].clientX, e.touches[0].clientY));
-  document.addEventListener('mouseup', () => { dragging = false; });
-  document.addEventListener('touchend', () => { dragging = false; });
+  const sig = ac ? { signal: ac.signal } : {};
+  document.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY), sig);
+  document.addEventListener('touchmove', (e) => onMove(e.touches[0].clientX, e.touches[0].clientY), sig);
+  document.addEventListener('mouseup', () => { dragging = false; }, sig);
+  document.addEventListener('touchend', () => { dragging = false; }, sig);
 }
 
-function setupResize(wrapper, canvas, handle, type, title, labels, datasets) {
+function setupResize(wrapper, canvas, handle, type, title, labels, datasets, ac) {
   let resizing = false, resizeX, resizeY, startW, startH;
   const onStart = (x, y) => { resizing = true; resizeX = x; resizeY = y; startW = canvas.width; startH = canvas.height; };
   handle.addEventListener('mousedown', (e) => { onStart(e.clientX, e.clientY); e.preventDefault(); e.stopPropagation(); });
@@ -2686,13 +2698,16 @@ function setupResize(wrapper, canvas, handle, type, title, labels, datasets) {
     wrapper.style.width = canvas.width + 'px';
     drawChart(canvas.getContext('2d'), canvas, type, title, labels, datasets);
   };
-  document.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
-  document.addEventListener('touchmove', (e) => onMove(e.touches[0].clientX, e.touches[0].clientY));
-  document.addEventListener('mouseup', () => { resizing = false; });
-  document.addEventListener('touchend', () => { resizing = false; });
+  const sig = ac ? { signal: ac.signal } : {};
+  document.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY), sig);
+  document.addEventListener('touchmove', (e) => onMove(e.touches[0].clientX, e.touches[0].clientY), sig);
+  document.addEventListener('mouseup', () => { resizing = false; }, sig);
+  document.addEventListener('touchend', () => { resizing = false; }, sig);
 }
 
 function removeSheetChart(id) {
+  const chart = sheetCharts.find(c => c.id === id);
+  if (chart && chart.ac) chart.ac.abort();
   const el = document.getElementById(id);
   if (el) el.remove();
   sheetCharts = sheetCharts.filter(c => c.id !== id);
@@ -4228,7 +4243,8 @@ function moveBlock(r1, c1, r2, c2, targetR1, targetC1) {
   };
 
   renderSheet();
-  selectCell(targetR1, targetC1);
+  selectedCell = { row: targetR1, col: targetC1 };
+  document.getElementById('cell-ref').textContent = COL_LETTERS[targetC1] + (targetR1 + 1);
   highlightRange();
   triggerAutoSave();
   document.getElementById('status-info').textContent = 'Block moved';
