@@ -6,6 +6,8 @@ const ROWS = 1000;
 const COLS = 26;
 const VISIBLE_BUFFER = 10; // extra rows to render above/below viewport
 const COL_LETTERS = Array.from({ length: COLS }, (_, i) => String.fromCharCode(65 + i));
+const PRO_CHECKOUT_URL = 'https://aanomaly.lemonsqueezy.com/checkout/buy/c37c05a0-89a5-47a5-a1e6-bf90310f5090';
+const WORKER_URL = 'https://quantix-pro.xpropics.workers.dev';
 
 // State
 let sheets = [];
@@ -4260,9 +4262,7 @@ if ('launchQueue' in window) {
 // Pro / Freemium
 // ============================================
 
-// CONFIGURE
-const PRO_CHECKOUT_URL = 'https://aanomaly.lemonsqueezy.com/checkout/buy/c37c05a0-89a5-47a5-a1e6-bf90310f5090';
-const WORKER_URL = 'https://quantix-pro.xpropics.workers.dev';
+// Pro / Freemium Config (constants defined at top of file)
 
 function isPro() {
   const data = localStorage.getItem('quantix-pro');
