@@ -169,6 +169,24 @@ body {
 
 .pro-error { color: var(--danger); font-size: 12px; margin-top: 8px; min-height: 18px; }
 
+.google-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  background: white;
+  color: #333;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 8px;
+}
+
+.google-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+
 .pro-status {
   background: var(--bg-tertiary);
   border: 1px solid var(--accent);
