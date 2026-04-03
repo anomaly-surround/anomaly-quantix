@@ -1,10 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f0f1a"/>
+      <stop offset="100%" stop-color="#1a1a2e"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#6c5ce7"/>
       <stop offset="100%" stop-color="#a29bfe"/>
     </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6c5ce7" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#a29bfe" stop-opacity="0.1"/>
+    </linearGradient>
   </defs>
-  <rect width="192" height="192" rx="28" fill="url(#g)"/>
-  <text x="96" y="106" text-anchor="middle" dominant-baseline="middle" fill="white" font-family="sans-serif" font-weight="800" font-size="110">Q</text>
+
+  <!-- Background -->
+  <rect width="192" height="192" rx="36" fill="url(#bg)"/>
+
+  <!-- Subtle grid -->
+  <g stroke="#2a2a4a" stroke-width="1" opacity="0.5">
+    <line x1="48" y1="22" x2="48" y2="170"/>
+    <line x1="96" y1="22" x2="96" y2="170"/>
+    <line x1="144" y1="22" x2="144" y2="170"/>
+    <line x1="22" y1="48" x2="170" y2="48"/>
+    <line x1="22" y1="96" x2="170" y2="96"/>
+    <line x1="22" y1="144" x2="170" y2="144"/>
+  </g>
+
+  <!-- Glow cells -->
+  <rect x="48" y="48" width="48" height="48" fill="url(#glow)" rx="3"/>
+  <rect x="96" y="96" width="48" height="48" fill="url(#glow)" rx="3"/>
+
+  <!-- Selected cell -->
+  <rect x="96" y="48" width="48" height="48" fill="none" stroke="url(#accent)" stroke-width="2" rx="3"/>
+
+  <!-- Q letter -->
+  <g fill="none" stroke="url(#accent)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="92" cy="88" r="40"/>
+    <line x1="118" y1="116" x2="142" y2="146"/>
+  </g>
 </svg>
