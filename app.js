@@ -4352,10 +4352,6 @@ function signOut() {
 
 function handleCheckout() {
   window.open(PRO_CHECKOUT_URL, '_blank');
-  document.getElementById('pro-modal').style.display = 'none';
-  setTimeout(() => {
-    document.getElementById('confirm-modal').style.display = 'flex';
-  }, 1000);
 }
 
 function activateFromConfirm() {
