@@ -1481,13 +1481,16 @@ tr.row-dragging {
 
 /* === Mobile Responsive === */
 @media (max-width: 768px) {
-  body { font-size: 12px; }
+  body { font-size: 12px; overflow-x: hidden; }
+  #app { max-width: 100vw; overflow-x: hidden; }
 
   /* Top bar: stack vertically */
   .top-bar {
     flex-wrap: wrap;
     padding: 6px 8px;
     gap: 6px;
+    max-width: 100vw;
+    overflow: hidden;
   }
 
   .brand-name { display: none; }
@@ -1495,7 +1498,9 @@ tr.row-dragging {
   .file-controls {
     flex-direction: column;
     gap: 4px;
-    width: 100%;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
   }
 
   #file-name {
@@ -1653,8 +1658,6 @@ tr.row-dragging {
   /* Help modal */
   .help-body { max-height: 65vh; }
 
-  /* Top bar layout */
-  .top-bar { flex-wrap: nowrap; }
 }
 
 @media (max-width: 400px) {
