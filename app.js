@@ -282,6 +282,9 @@ function attachCellEvents() {
       return;
     }
 
+    // Right-click: don't reset selection, let contextmenu handler deal with it
+    if (e.button === 2) return;
+
     // Block drag: if clicking inside an existing multi-cell selection, start block drag
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey && selectionRange && isInSelectionRange(row, col)) {
       const r1 = Math.min(selectionRange.startRow, selectionRange.endRow);
