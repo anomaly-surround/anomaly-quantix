@@ -22,6 +22,11 @@ jobs:
           HASH=$(git rev-parse --short HEAD)
           sed -i "s/style\.css/style.css?v=$HASH/" index.html
           sed -i "s/app\.js/app.js?v=$HASH/" index.html
+      - name: Generate PNG icons from SVG
+        run: |
+          sudo apt-get install -y librsvg2-bin
+          rsvg-convert icon-192.svg -w 192 -h 192 -o icon-192.png
+          rsvg-convert icon-512.svg -w 512 -h 512 -o icon-512.png
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

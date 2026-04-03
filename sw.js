@@ -1,13 +1,6 @@
 const CACHE_NAME = 'quantix-v1';
-const ASSETS = [
-  '/anomaly-quantix/',
-  '/anomaly-quantix/index.html',
-  '/anomaly-quantix/style.css',
-  '/anomaly-quantix/app.js'
-];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)));
   self.skipWaiting();
 });
 
