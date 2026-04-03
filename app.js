@@ -44,12 +44,14 @@ function init() {
   if (saved) {
     try {
       const data = JSON.parse(saved);
-      sheets = data.sheets;
-      activeSheet = data.activeSheet || 0;
-      document.getElementById('file-name').value = data.fileName || 'Untitled Spreadsheet';
-      renderSheetTabs();
-      renderSheet();
-      selectCell(0, 0);
+      if (data.sheets && Array.isArray(data.sheets)) {
+        sheets = data.sheets.map(s => sanitizeSheetData(s));
+        activeSheet = Math.max(0, Math.min(toNum(data.activeSheet || 0), sheets.length - 1));
+        document.getElementById('file-name').value = escapeHTML(String(data.fileName || 'Untitled Spreadsheet'));
+        renderSheetTabs();
+        renderSheet();
+        selectCell(0, 0);
+      }
     } catch (e) { /* ignore */ }
   }
 }
@@ -345,12 +347,93 @@ function selectCell(row, col) {
   const cell = sheets[activeSheet].cells[key] || {};
   document.getElementById('formula-input').value = cell.formula || cell.value || '';
 
+  // Highlight formula references
+  highlightFormulaRefs(cell);
+
   // Update toolbar state
   updateToolbarState(cell);
   updateStatusBar();
 
   // Scroll into view
   if (td) td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+const FORMULA_REF_COLORS = [
+  { outline: '#ff6b6b', bg: 'rgba(255,107,107,0.15)' },
+  { outline: '#74b9ff', bg: 'rgba(116,185,255,0.15)' },
+  { outline: '#00cec9', bg: 'rgba(0,206,201,0.15)' },
+  { outline: '#fdcb6e', bg: 'rgba(253,203,110,0.15)' },
+  { outline: '#a29bfe', bg: 'rgba(162,155,254,0.15)' },
+  { outline: '#fd79a8', bg: 'rgba(253,121,168,0.15)' },
+  { outline: '#ffa502', bg: 'rgba(255,165,2,0.15)' },
+  { outline: '#7bed9f', bg: 'rgba(123,237,159,0.15)' },
+];
+
+function highlightFormulaRefs(cell) {
+  // Clear previous highlights
+  document.querySelectorAll('td.formula-ref').forEach(td => {
+    td.classList.remove('formula-ref');
+    td.querySelector('.cell')?.removeAttribute('style');
+  });
+
+  if (!cell || !cell.formula) return;
+
+  const formula = cell.formula;
+  // Match ranges like A1:B10 and single refs like C3
+  const rangeRegex = /([A-Z]+)(\d+):([A-Z]+)(\d+)/gi;
+  const singleRegex = /([A-Z]+)(\d+)/gi;
+
+  const refs = []; // each entry: { cells: [{row, col}, ...] }
+
+  // First extract ranges
+  const usedPositions = new Set();
+  let match;
+  while ((match = rangeRegex.exec(formula)) !== null) {
+    const c1 = match[1].toUpperCase().charCodeAt(0) - 65;
+    const r1 = parseInt(match[2]) - 1;
+    const c2 = match[3].toUpperCase().charCodeAt(0) - 65;
+    const r2 = parseInt(match[4]) - 1;
+    const cells = [];
+    for (let r = Math.min(r1, r2); r <= Math.max(r1, r2); r++) {
+      for (let c = Math.min(c1, c2); c <= Math.max(c1, c2); c++) {
+        cells.push({ row: r, col: c });
+        usedPositions.add(match.index + '-' + (match.index + match[0].length));
+      }
+    }
+    refs.push({ cells });
+  }
+
+  // Then extract single refs not part of a range
+  while ((match = singleRegex.exec(formula)) !== null) {
+    let isPartOfRange = false;
+    for (const pos of usedPositions) {
+      const [start, end] = pos.split('-').map(Number);
+      if (match.index >= start && match.index < end) { isPartOfRange = true; break; }
+    }
+    if (isPartOfRange) continue;
+    const c = match[1].toUpperCase().charCodeAt(0) - 65;
+    const r = parseInt(match[2]) - 1;
+    if (c >= 0 && c < COLS && r >= 0 && r < ROWS) {
+      refs.push({ cells: [{ row: r, col: c }] });
+    }
+  }
+
+  // Apply colored highlights
+  refs.forEach((ref, i) => {
+    const color = FORMULA_REF_COLORS[i % FORMULA_REF_COLORS.length];
+    ref.cells.forEach(({ row, col }) => {
+      const td = getCellTd(row, col);
+      if (td) {
+        td.classList.add('formula-ref');
+        const cellDiv = td.querySelector('.cell');
+        if (cellDiv) {
+          cellDiv.style.outline = `2px solid ${color.outline}`;
+          cellDiv.style.outlineOffset = '-1px';
+          cellDiv.style.backgroundColor = color.bg;
+        }
+      }
+    });
+  });
 }
 
 function highlightRange() {
@@ -482,210 +565,376 @@ document.getElementById('formula-input').addEventListener('keydown', (e) => {
 // Formula Engine
 // ============================================
 
+// Safe expression tokenizer & parser (no eval/Function)
 function evaluateFormula(formula, sheetIdx) {
   try {
-    const expr = formula.substring(1).toUpperCase();
+    const expr = formula.substring(1);
     const sheet = sheets[sheetIdx];
 
-    // Handle VLOOKUP/HLOOKUP specially before resolving references
-    if (expr.startsWith('VLOOKUP(')) return evalVlookup(expr, sheet, sheetIdx);
-    if (expr.startsWith('HLOOKUP(')) return evalHlookup(expr, sheet, sheetIdx);
+    // Handle VLOOKUP/HLOOKUP specially
+    const upper = expr.toUpperCase();
+    if (upper.startsWith('VLOOKUP(')) return evalVlookup(upper, sheet, sheetIdx);
+    if (upper.startsWith('HLOOKUP(')) return evalHlookup(upper, sheet, sheetIdx);
 
-    // Replace cell references with values
-    const resolved = expr.replace(/\b([A-Z])(\d+):([A-Z])(\d+)\b/g, (_, c1, r1, c2, r2) => {
-      const values = getRangeValues(c1.charCodeAt(0) - 65, +r1 - 1, c2.charCodeAt(0) - 65, +r2 - 1, sheetIdx);
-      return '[' + values.map(v => typeof v === 'number' ? v : `"${v}"`).join(',') + ']';
-    }).replace(/\b([A-Z])(\d+)\b/g, (_, c, r) => {
-      const key = cellKey(+r - 1, c.charCodeAt(0) - 65);
-      const cell = sheet.cells[key];
-      if (!cell) return '0';
-      const v = cell.formula ? evaluateFormula(cell.formula, sheetIdx) : cell.value;
-      return typeof v === 'number' ? v : `"${v || 0}"`;
-    });
-
-    // Built-in functions
-    const funcs = {
-      // Math
-      SUM: (arr) => flat(arr).reduce((a, b) => a + toNum(b), 0),
-      AVERAGE: (arr) => { const f = flat(arr).map(toNum); return f.reduce((a, b) => a + b, 0) / f.length; },
-      MEDIAN: (arr) => { const s = flat(arr).map(toNum).sort((a,b) => a-b); const m = Math.floor(s.length/2); return s.length % 2 ? s[m] : (s[m-1]+s[m])/2; },
-      COUNT: (arr) => flat(arr).filter(v => typeof v === 'number' || !isNaN(+v)).length,
-      COUNTA: (arr) => flat(arr).filter(v => v !== '' && v !== null && v !== undefined).length,
-      COUNTIF: (args) => { const [range, crit] = args; return flat(Array.isArray(range) ? range : [range]).filter(v => matchCriteria(v, crit)).length; },
-      SUMIF: (args) => { const [range, crit, sumRange] = args; const r = flat(Array.isArray(range) ? range : [range]); const s = sumRange ? flat(Array.isArray(sumRange) ? sumRange : [sumRange]) : r; let total = 0; r.forEach((v, i) => { if (matchCriteria(v, crit)) total += toNum(s[i] ?? 0); }); return total; },
-      AVERAGEIF: (args) => { const [range, crit, avgRange] = args; const r = flat(Array.isArray(range) ? range : [range]); const s = avgRange ? flat(Array.isArray(avgRange) ? avgRange : [avgRange]) : r; let total = 0, cnt = 0; r.forEach((v, i) => { if (matchCriteria(v, crit)) { total += toNum(s[i] ?? 0); cnt++; } }); return cnt ? total / cnt : 0; },
-      MIN: (arr) => Math.min(...flat(arr).map(toNum).filter(n => !isNaN(n))),
-      MAX: (arr) => Math.max(...flat(arr).map(toNum).filter(n => !isNaN(n))),
-      ABS: (args) => Math.abs(toNum(args[0])),
-      SQRT: (args) => Math.sqrt(toNum(args[0])),
-      POWER: (args) => Math.pow(toNum(args[0]), toNum(args[1])),
-      MOD: (args) => toNum(args[0]) % toNum(args[1]),
-      ROUND: (args) => { const [n, d = 0] = args; return +toNum(n).toFixed(toNum(d)); },
-      ROUNDUP: (args) => { const [n, d = 0] = args; const f = Math.pow(10, toNum(d)); return Math.ceil(toNum(n) * f) / f; },
-      ROUNDDOWN: (args) => { const [n, d = 0] = args; const f = Math.pow(10, toNum(d)); return Math.floor(toNum(n) * f) / f; },
-      CEILING: (args) => { const [n, s = 1] = args; return Math.ceil(toNum(n) / toNum(s)) * toNum(s); },
-      FLOOR: (args) => { const [n, s = 1] = args; return Math.floor(toNum(n) / toNum(s)) * toNum(s); },
-      RAND: () => Math.random(),
-      RANDBETWEEN: (args) => { const [lo, hi] = args.map(toNum); return Math.floor(Math.random() * (hi - lo + 1)) + lo; },
-      PI: () => Math.PI,
-      PRODUCT: (arr) => flat(arr).map(toNum).reduce((a, b) => a * b, 1),
-      INT: (args) => Math.trunc(toNum(args[0])),
-      SIGN: (args) => Math.sign(toNum(args[0])),
-      LOG: (args) => args.length > 1 ? Math.log(toNum(args[0])) / Math.log(toNum(args[1])) : Math.log10(toNum(args[0])),
-      LOG10: (args) => Math.log10(toNum(args[0])),
-      LN: (args) => Math.log(toNum(args[0])),
-      EXP: (args) => Math.exp(toNum(args[0])),
-      SIN: (args) => Math.sin(toNum(args[0])),
-      COS: (args) => Math.cos(toNum(args[0])),
-      TAN: (args) => Math.tan(toNum(args[0])),
-      ASIN: (args) => Math.asin(toNum(args[0])),
-      ACOS: (args) => Math.acos(toNum(args[0])),
-      ATAN: (args) => Math.atan(toNum(args[0])),
-      DEGREES: (args) => toNum(args[0]) * (180 / Math.PI),
-      RADIANS: (args) => toNum(args[0]) * (Math.PI / 180),
-      LARGE: (args) => { const sorted = flat(Array.isArray(args[0]) ? args[0] : [args[0]]).map(toNum).sort((a, b) => b - a); return sorted[toNum(args[1]) - 1] ?? '#NUM'; },
-      SMALL: (args) => { const sorted = flat(Array.isArray(args[0]) ? args[0] : [args[0]]).map(toNum).sort((a, b) => a - b); return sorted[toNum(args[1]) - 1] ?? '#NUM'; },
-      RANK: (args) => { const [val, range] = args; const arr = flat(Array.isArray(range) ? range : [range]).map(toNum).sort((a, b) => b - a); return arr.indexOf(toNum(val)) + 1 || '#N/A'; },
-      STDEV: (arr) => { const f = flat(arr).map(toNum); const avg = f.reduce((a, b) => a + b, 0) / f.length; return Math.sqrt(f.reduce((s, v) => s + (v - avg) ** 2, 0) / (f.length - 1)); },
-      VAR: (arr) => { const f = flat(arr).map(toNum); const avg = f.reduce((a, b) => a + b, 0) / f.length; return f.reduce((s, v) => s + (v - avg) ** 2, 0) / (f.length - 1); },
-      MODE: (arr) => { const f = flat(arr).map(toNum); const freq = {}; f.forEach(v => freq[v] = (freq[v] || 0) + 1); return +Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0]; },
-      PERCENTILE: (args) => { const arr = flat(Array.isArray(args[0]) ? args[0] : [args[0]]).map(toNum).sort((a, b) => a - b); const k = toNum(args[1]); const i = k * (arr.length - 1); const lo = Math.floor(i); const hi = Math.ceil(i); return lo === hi ? arr[lo] : arr[lo] + (arr[hi] - arr[lo]) * (i - lo); },
-
-      // Logic
-      IF: (args) => args[0] ? args[1] : args[2],
-      AND: (arr) => flat(arr).every(Boolean),
-      OR: (arr) => flat(arr).some(Boolean),
-      NOT: (args) => !args[0],
-      IFERROR: (args) => { try { return args[0] !== '#ERROR' && args[0] !== '#ERR' ? args[0] : args[1]; } catch { return args[1]; } },
-      IFS: (args) => { for (let i = 0; i < args.length; i += 2) { if (args[i]) return args[i + 1]; } return '#N/A'; },
-      SWITCH: (args) => { const val = args[0]; for (let i = 1; i < args.length - 1; i += 2) { if (val == args[i]) return args[i + 1]; } return args.length % 2 === 0 ? args[args.length - 1] : '#N/A'; },
-      CHOOSE: (args) => { const idx = toNum(args[0]); return args[idx] ?? '#VALUE'; },
-      ISBLANK: (args) => args[0] === '' || args[0] === null || args[0] === undefined || args[0] === 0,
-      ISNUMBER: (args) => typeof args[0] === 'number' || !isNaN(+args[0]),
-      ISTEXT: (args) => typeof args[0] === 'string' && isNaN(+args[0]),
-      ISERROR: (args) => String(args[0]).startsWith('#'),
-      ISEVEN: (args) => toNum(args[0]) % 2 === 0,
-      ISODD: (args) => toNum(args[0]) % 2 !== 0,
-
-      // Lookup
-      VLOOKUP: (args) => '#USE_SPECIAL',
-      HLOOKUP: (args) => '#USE_SPECIAL_H',
-      INDEX: (args) => {
-        const [range, rowIdx, colIdx] = args;
-        if (Array.isArray(range)) return range[toNum(rowIdx) - 1] ?? '#REF';
-        return range;
-      },
-      MATCH: (args) => {
-        const [needle, range] = args;
-        const arr = flat(Array.isArray(range) ? range : [range]);
-        const idx = arr.findIndex(v => v == needle || String(v).toLowerCase() === String(needle).toLowerCase());
-        return idx >= 0 ? idx + 1 : '#N/A';
-      },
-      ROW: (args) => selectedCell.row + 1,
-      COLUMN: (args) => selectedCell.col + 1,
-      ROWS: (args) => Array.isArray(args[0]) ? args[0].length : 1,
-      COLUMNS: (args) => 1,
-
-      // Text
-      CONCATENATE: (args) => flat(args).join(''),
-      CONCAT: (args) => flat(args).join(''),
-      TEXTJOIN: (args) => { const [delim, skipEmpty, ...rest] = args; const vals = flat(rest); return (skipEmpty ? vals.filter(v => v !== '' && v != null) : vals).join(delim); },
-      LEFT: (args) => String(args[0]).substring(0, toNum(args[1] ?? 1)),
-      RIGHT: (args) => { const s = String(args[0]); const n = toNum(args[1] ?? 1); return s.substring(s.length - n); },
-      MID: (args) => String(args[0]).substring(toNum(args[1]) - 1, toNum(args[1]) - 1 + toNum(args[2])),
-      LEN: (args) => String(args[0]).length,
-      UPPER: (args) => String(args[0]).toUpperCase(),
-      LOWER: (args) => String(args[0]).toLowerCase(),
-      PROPER: (args) => String(args[0]).replace(/\b\w/g, c => c.toUpperCase()),
-      TRIM: (args) => String(args[0]).trim(),
-      CLEAN: (args) => String(args[0]).replace(/[\x00-\x1F]/g, ''),
-      EXACT: (args) => String(args[0]) === String(args[1]),
-      REPLACE: (args) => { const s = String(args[0]); const start = toNum(args[1]) - 1; const len = toNum(args[2]); return s.substring(0, start) + String(args[3]) + s.substring(start + len); },
-      SUBSTITUTE: (args) => { const [text, old, rep, nth] = args; if (nth) { let i = 0; return String(text).replace(new RegExp(escapeRegex(String(old)), 'g'), m => (++i === toNum(nth)) ? rep : m); } return String(text).split(String(old)).join(String(rep)); },
-      FIND: (args) => { const idx = String(args[1]).indexOf(String(args[0]), toNum(args[2] ?? 1) - 1); return idx >= 0 ? idx + 1 : '#VALUE'; },
-      SEARCH: (args) => { const idx = String(args[1]).toLowerCase().indexOf(String(args[0]).toLowerCase(), toNum(args[2] ?? 1) - 1); return idx >= 0 ? idx + 1 : '#VALUE'; },
-      REPT: (args) => String(args[0]).repeat(toNum(args[1])),
-      TEXT: (args) => formatText(args[0], String(args[1])),
-      VALUE: (args) => toNum(String(args[0]).replace(/[^0-9.\-]/g, '')),
-      DOLLAR: (args) => '$' + toNum(args[0]).toFixed(toNum(args[1] ?? 2)),
-      FIXED: (args) => toNum(args[0]).toFixed(toNum(args[1] ?? 2)),
-      CHAR: (args) => String.fromCharCode(toNum(args[0])),
-      CODE: (args) => String(args[0]).charCodeAt(0),
-      T: (args) => typeof args[0] === 'string' ? args[0] : '',
-      N: (args) => typeof args[0] === 'number' ? args[0] : 0,
-
-      // Date
-      NOW: () => new Date().toLocaleString(),
-      TODAY: () => new Date().toLocaleDateString(),
-      YEAR: (args) => new Date(args[0]).getFullYear(),
-      MONTH: (args) => new Date(args[0]).getMonth() + 1,
-      DAY: (args) => new Date(args[0]).getDate(),
-      HOUR: (args) => new Date(args[0]).getHours(),
-      MINUTE: (args) => new Date(args[0]).getMinutes(),
-      SECOND: (args) => new Date(args[0]).getSeconds(),
-      DAYS: (args) => Math.round((new Date(args[0]) - new Date(args[1])) / 86400000),
-      EDATE: (args) => { const d = new Date(args[0]); d.setMonth(d.getMonth() + toNum(args[1])); return d.toLocaleDateString(); },
-      EOMONTH: (args) => { const d = new Date(args[0]); d.setMonth(d.getMonth() + toNum(args[1]) + 1, 0); return d.toLocaleDateString(); },
-      DATE: (args) => new Date(toNum(args[0]), toNum(args[1]) - 1, toNum(args[2])).toLocaleDateString(),
-      WEEKDAY: (args) => new Date(args[0]).getDay() + 1,
-      WEEKNUM: (args) => { const d = new Date(args[0]); const start = new Date(d.getFullYear(), 0, 1); return Math.ceil(((d - start) / 86400000 + start.getDay() + 1) / 7); },
-      NETWORKDAYS: (args) => { const s = new Date(args[0]); const e = new Date(args[1]); let count = 0; const d = new Date(s); while (d <= e) { const day = d.getDay(); if (day !== 0 && day !== 6) count++; d.setDate(d.getDate() + 1); } return count; },
-      DATEDIF: (args) => { const s = new Date(args[0]); const e = new Date(args[1]); const unit = String(args[2]).toUpperCase(); if (unit === 'D') return Math.round((e - s) / 86400000); if (unit === 'M') return (e.getFullYear() - s.getFullYear()) * 12 + e.getMonth() - s.getMonth(); if (unit === 'Y') return e.getFullYear() - s.getFullYear(); return '#VALUE'; },
-
-      // Financial
-      PMT: (args) => { const [rate, nper, pv, fv = 0] = args.map(toNum); const r = rate; if (r === 0) return -(pv + fv) / nper; return -(pv * r * Math.pow(1 + r, nper) + fv * r) / (Math.pow(1 + r, nper) - 1); },
-      FV: (args) => { const [rate, nper, pmt, pv = 0] = args.map(toNum); const r = rate; if (r === 0) return -(pv + pmt * nper); return -(pv * Math.pow(1 + r, nper) + pmt * (Math.pow(1 + r, nper) - 1) / r); },
-      PV: (args) => { const [rate, nper, pmt, fv = 0] = args.map(toNum); const r = rate; if (r === 0) return -(fv + pmt * nper); return -(fv / Math.pow(1 + r, nper) + pmt * (1 - Math.pow(1 + r, -nper)) / r); },
-      NPV: (args) => { const rate = toNum(args[0]); const flows = flat(args.slice(1)).map(toNum); return flows.reduce((sum, cf, i) => sum + cf / Math.pow(1 + rate, i + 1), 0); },
-      IRR: (args) => { const flows = flat(Array.isArray(args[0]) ? args[0] : args).map(toNum); let guess = 0.1; for (let iter = 0; iter < 100; iter++) { let npv = 0, dnpv = 0; flows.forEach((cf, i) => { npv += cf / Math.pow(1 + guess, i); dnpv -= i * cf / Math.pow(1 + guess, i + 1); }); const next = guess - npv / dnpv; if (Math.abs(next - guess) < 1e-10) return Math.round(next * 1e8) / 1e8; guess = next; } return '#NUM'; },
-    };
-
-    function matchCriteria(val, criteria) {
-      const s = String(criteria);
-      if (s.startsWith('>=')) return toNum(val) >= toNum(s.slice(2));
-      if (s.startsWith('<=')) return toNum(val) <= toNum(s.slice(2));
-      if (s.startsWith('<>')) return String(val) !== s.slice(2);
-      if (s.startsWith('>')) return toNum(val) > toNum(s.slice(1));
-      if (s.startsWith('<')) return toNum(val) < toNum(s.slice(1));
-      if (s.includes('*') || s.includes('?')) {
-        const regex = new RegExp('^' + s.replace(/\*/g, '.*').replace(/\?/g, '.') + '$', 'i');
-        return regex.test(String(val));
-      }
-      return String(val).toLowerCase() === s.toLowerCase() || toNum(val) === toNum(s);
-    }
-
-    function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-
-    function formatText(val, fmt) {
-      if (fmt === '0%') return (toNum(val) * 100).toFixed(0) + '%';
-      if (fmt === '0.00') return toNum(val).toFixed(2);
-      if (fmt.includes('$')) return '$' + toNum(val).toFixed(2);
-      return String(val);
-    }
-
-    // Parse function calls
-    let processed = resolved;
-    for (const [name, fn] of Object.entries(funcs)) {
-      const regex = new RegExp(`${name}\\(`, 'g');
-      while (regex.test(processed)) {
-        processed = processed.replace(new RegExp(`${name}\\(([^)]*?)\\)`), (_, args) => {
-          try {
-            const parsed = Function(`"use strict"; return [${args}]`)();
-            return JSON.stringify(fn(parsed));
-          } catch {
-            return '#ERR';
-          }
-        });
-        regex.lastIndex = 0;
-      }
-    }
-
-    // Evaluate the expression
-    const result = Function(`"use strict"; return (${processed})`)();
+    const tokens = tokenize(expr);
+    const resolved = resolveTokens(tokens, sheet, sheetIdx);
+    const result = parseExpression(resolved, { pos: 0 });
     return typeof result === 'number' ? (Math.round(result * 1e10) / 1e10) : result;
   } catch (e) {
     return '#ERROR';
   }
+}
+
+function tokenize(expr) {
+  const tokens = [];
+  let i = 0;
+  while (i < expr.length) {
+    const ch = expr[i];
+    if (/\s/.test(ch)) { i++; continue; }
+    // String literal
+    if (ch === '"') {
+      let s = ''; i++;
+      while (i < expr.length && expr[i] !== '"') { s += expr[i]; i++; }
+      i++; // skip closing "
+      tokens.push({ type: 'string', value: s });
+    }
+    // Number
+    else if (/[0-9.]/.test(ch) || (ch === '-' && (tokens.length === 0 || ['op', 'lparen', 'comma'].includes(tokens[tokens.length - 1]?.type)))) {
+      let n = ch; i++;
+      while (i < expr.length && /[0-9.eE]/.test(expr[i])) { n += expr[i]; i++; }
+      tokens.push({ type: 'number', value: parseFloat(n) });
+    }
+    // Cell ref or function name or boolean
+    else if (/[A-Za-z_]/.test(ch)) {
+      let name = '';
+      while (i < expr.length && /[A-Za-z0-9_]/.test(expr[i])) { name += expr[i]; i++; }
+      const upper = name.toUpperCase();
+      if (upper === 'TRUE') tokens.push({ type: 'boolean', value: true });
+      else if (upper === 'FALSE') tokens.push({ type: 'boolean', value: false });
+      // Range ref: A1:B10
+      else if (i < expr.length && expr[i] === ':') {
+        i++; // skip :
+        let end = '';
+        while (i < expr.length && /[A-Za-z0-9]/.test(expr[i])) { end += expr[i]; i++; }
+        tokens.push({ type: 'range', value: upper + ':' + end.toUpperCase() });
+      }
+      // Function call
+      else if (i < expr.length && expr[i] === '(') {
+        tokens.push({ type: 'func', value: upper });
+      }
+      // Cell reference (like A1, B23)
+      else if (/^[A-Z]\d+$/i.test(name)) {
+        tokens.push({ type: 'cellref', value: upper });
+      }
+      else {
+        tokens.push({ type: 'string', value: name });
+      }
+    }
+    else if (ch === '(') { tokens.push({ type: 'lparen' }); i++; }
+    else if (ch === ')') { tokens.push({ type: 'rparen' }); i++; }
+    else if (ch === ',') { tokens.push({ type: 'comma' }); i++; }
+    else if (ch === '+' || ch === '-' || ch === '*' || ch === '/' || ch === '%' || ch === '^') {
+      tokens.push({ type: 'op', value: ch }); i++;
+    }
+    else if (ch === '>' || ch === '<' || ch === '!' || ch === '=') {
+      let op = ch; i++;
+      if (i < expr.length && (expr[i] === '=' || (ch === '<' && expr[i] === '>'))) { op += expr[i]; i++; }
+      tokens.push({ type: 'compare', value: op });
+    }
+    else if (ch === '&') { tokens.push({ type: 'op', value: '&' }); i++; }
+    else { i++; } // skip unknown
+  }
+  return tokens;
+}
+
+function resolveTokens(tokens, sheet, sheetIdx) {
+  return tokens.map(t => {
+    if (t.type === 'cellref') {
+      const col = t.value.charCodeAt(0) - 65;
+      const row = parseInt(t.value.substring(1)) - 1;
+      const cell = sheet.cells[cellKey(row, col)];
+      if (!cell) return { type: 'number', value: 0 };
+      const v = cell.formula ? evaluateFormula(cell.formula, sheetIdx) : cell.value;
+      return typeof v === 'number' ? { type: 'number', value: v } : { type: 'string', value: String(v ?? '') };
+    }
+    if (t.type === 'range') {
+      const m = t.value.match(/^([A-Z])(\d+):([A-Z])(\d+)$/);
+      if (!m) return { type: 'array', value: [] };
+      const values = getRangeValues(m[1].charCodeAt(0) - 65, +m[2] - 1, m[3].charCodeAt(0) - 65, +m[4] - 1, sheetIdx);
+      return { type: 'array', value: values };
+    }
+    return t;
+  });
+}
+
+// Recursive descent parser for safe expression evaluation
+function parseExpression(tokens, ctx) {
+  return parseCompare(tokens, ctx);
+}
+
+function parseCompare(tokens, ctx) {
+  let left = parseConcat(tokens, ctx);
+  while (ctx.pos < tokens.length && tokens[ctx.pos]?.type === 'compare') {
+    const op = tokens[ctx.pos].value; ctx.pos++;
+    const right = parseConcat(tokens, ctx);
+    const l = toNum(left), r = toNum(right);
+    if (op === '>') left = l > r;
+    else if (op === '<') left = l < r;
+    else if (op === '>=') left = l >= r;
+    else if (op === '<=') left = l <= r;
+    else if (op === '=' || op === '==') left = left == right;
+    else if (op === '<>' || op === '!=') left = left != right;
+  }
+  return left;
+}
+
+function parseConcat(tokens, ctx) {
+  let left = parseAddSub(tokens, ctx);
+  while (ctx.pos < tokens.length && tokens[ctx.pos]?.type === 'op' && tokens[ctx.pos].value === '&') {
+    ctx.pos++;
+    const right = parseAddSub(tokens, ctx);
+    left = String(left) + String(right);
+  }
+  return left;
+}
+
+function parseAddSub(tokens, ctx) {
+  let left = parseMulDiv(tokens, ctx);
+  while (ctx.pos < tokens.length && tokens[ctx.pos]?.type === 'op' && (tokens[ctx.pos].value === '+' || tokens[ctx.pos].value === '-')) {
+    const op = tokens[ctx.pos].value; ctx.pos++;
+    const right = parseMulDiv(tokens, ctx);
+    left = op === '+' ? toNum(left) + toNum(right) : toNum(left) - toNum(right);
+  }
+  return left;
+}
+
+function parseMulDiv(tokens, ctx) {
+  let left = parsePower(tokens, ctx);
+  while (ctx.pos < tokens.length && tokens[ctx.pos]?.type === 'op' && (tokens[ctx.pos].value === '*' || tokens[ctx.pos].value === '/' || tokens[ctx.pos].value === '%')) {
+    const op = tokens[ctx.pos].value; ctx.pos++;
+    const right = parsePower(tokens, ctx);
+    if (op === '*') left = toNum(left) * toNum(right);
+    else if (op === '/') left = toNum(right) !== 0 ? toNum(left) / toNum(right) : '#DIV/0';
+    else left = toNum(left) % toNum(right);
+  }
+  return left;
+}
+
+function parsePower(tokens, ctx) {
+  let left = parseUnary(tokens, ctx);
+  while (ctx.pos < tokens.length && tokens[ctx.pos]?.type === 'op' && tokens[ctx.pos].value === '^') {
+    ctx.pos++;
+    const right = parseUnary(tokens, ctx);
+    left = Math.pow(toNum(left), toNum(right));
+  }
+  return left;
+}
+
+function parseUnary(tokens, ctx) {
+  if (ctx.pos < tokens.length && tokens[ctx.pos]?.type === 'op' && tokens[ctx.pos].value === '-') {
+    ctx.pos++;
+    return -toNum(parseAtom(tokens, ctx));
+  }
+  if (ctx.pos < tokens.length && tokens[ctx.pos]?.type === 'op' && tokens[ctx.pos].value === '+') {
+    ctx.pos++;
+  }
+  return parseAtom(tokens, ctx);
+}
+
+function parseAtom(tokens, ctx) {
+  if (ctx.pos >= tokens.length) return 0;
+  const t = tokens[ctx.pos];
+
+  if (t.type === 'number') { ctx.pos++; return t.value; }
+  if (t.type === 'string') { ctx.pos++; return t.value; }
+  if (t.type === 'boolean') { ctx.pos++; return t.value; }
+  if (t.type === 'array') { ctx.pos++; return t.value; }
+
+  // Parenthesized expression
+  if (t.type === 'lparen') {
+    ctx.pos++;
+    const val = parseExpression(tokens, ctx);
+    if (ctx.pos < tokens.length && tokens[ctx.pos]?.type === 'rparen') ctx.pos++;
+    return val;
+  }
+
+  // Function call
+  if (t.type === 'func') {
+    const name = t.value;
+    ctx.pos++; // func name
+    if (ctx.pos < tokens.length && tokens[ctx.pos]?.type === 'lparen') ctx.pos++; // (
+
+    // Parse arguments
+    const args = [];
+    while (ctx.pos < tokens.length && tokens[ctx.pos]?.type !== 'rparen') {
+      args.push(parseExpression(tokens, ctx));
+      if (ctx.pos < tokens.length && tokens[ctx.pos]?.type === 'comma') ctx.pos++;
+    }
+    if (ctx.pos < tokens.length && tokens[ctx.pos]?.type === 'rparen') ctx.pos++; // )
+
+    return callFunction(name, args);
+  }
+
+  ctx.pos++;
+  return 0;
+}
+
+// All formula functions - safe, no eval
+const FORMULA_FUNCS = {
+  // Math
+  SUM: (a) => flat(a).reduce((s, v) => s + toNum(v), 0),
+  AVERAGE: (a) => { const f = flat(a).map(toNum); return f.reduce((s, v) => s + v, 0) / f.length; },
+  MEDIAN: (a) => { const s = flat(a).map(toNum).sort((a,b)=>a-b); const m = Math.floor(s.length/2); return s.length%2 ? s[m] : (s[m-1]+s[m])/2; },
+  COUNT: (a) => flat(a).filter(v => typeof v === 'number' || !isNaN(+v)).length,
+  COUNTA: (a) => flat(a).filter(v => v !== '' && v !== null && v !== undefined).length,
+  COUNTIF: (a) => { const [range, crit] = a; return flat(Array.isArray(range)?range:[range]).filter(v => matchCriteria(v, crit)).length; },
+  SUMIF: (a) => { const [range, crit, sr] = a; const r = flat(Array.isArray(range)?range:[range]); const s = sr ? flat(Array.isArray(sr)?sr:[sr]) : r; let t = 0; r.forEach((v,i) => { if(matchCriteria(v,crit)) t += toNum(s[i]??0); }); return t; },
+  AVERAGEIF: (a) => { const [range, crit, ar] = a; const r = flat(Array.isArray(range)?range:[range]); const s = ar ? flat(Array.isArray(ar)?ar:[ar]) : r; let t = 0, c = 0; r.forEach((v,i) => { if(matchCriteria(v,crit)){t += toNum(s[i]??0); c++;} }); return c ? t/c : 0; },
+  MIN: (a) => Math.min(...flat(a).map(toNum).filter(n => !isNaN(n))),
+  MAX: (a) => Math.max(...flat(a).map(toNum).filter(n => !isNaN(n))),
+  ABS: (a) => Math.abs(toNum(a[0])),
+  SQRT: (a) => Math.sqrt(toNum(a[0])),
+  POWER: (a) => Math.pow(toNum(a[0]), toNum(a[1])),
+  MOD: (a) => toNum(a[0]) % toNum(a[1]),
+  ROUND: (a) => { const [n, d=0] = a; return +toNum(n).toFixed(toNum(d)); },
+  ROUNDUP: (a) => { const [n, d=0] = a; const f = Math.pow(10, toNum(d)); return Math.ceil(toNum(n)*f)/f; },
+  ROUNDDOWN: (a) => { const [n, d=0] = a; const f = Math.pow(10, toNum(d)); return Math.floor(toNum(n)*f)/f; },
+  CEILING: (a) => { const [n, s=1] = a; return Math.ceil(toNum(n)/toNum(s))*toNum(s); },
+  FLOOR: (a) => { const [n, s=1] = a; return Math.floor(toNum(n)/toNum(s))*toNum(s); },
+  RAND: () => Math.random(),
+  RANDBETWEEN: (a) => { const [lo, hi] = a.map(toNum); return Math.floor(Math.random()*(hi-lo+1))+lo; },
+  PI: () => Math.PI,
+  PRODUCT: (a) => flat(a).map(toNum).reduce((p, v) => p*v, 1),
+  INT: (a) => Math.trunc(toNum(a[0])),
+  SIGN: (a) => Math.sign(toNum(a[0])),
+  LOG: (a) => a.length > 1 ? Math.log(toNum(a[0]))/Math.log(toNum(a[1])) : Math.log10(toNum(a[0])),
+  LOG10: (a) => Math.log10(toNum(a[0])),
+  LN: (a) => Math.log(toNum(a[0])),
+  EXP: (a) => Math.exp(toNum(a[0])),
+  SIN: (a) => Math.sin(toNum(a[0])),
+  COS: (a) => Math.cos(toNum(a[0])),
+  TAN: (a) => Math.tan(toNum(a[0])),
+  ASIN: (a) => Math.asin(toNum(a[0])),
+  ACOS: (a) => Math.acos(toNum(a[0])),
+  ATAN: (a) => Math.atan(toNum(a[0])),
+  DEGREES: (a) => toNum(a[0]) * (180/Math.PI),
+  RADIANS: (a) => toNum(a[0]) * (Math.PI/180),
+  LARGE: (a) => { const s = flat(Array.isArray(a[0])?a[0]:[a[0]]).map(toNum).sort((x,y)=>y-x); return s[toNum(a[1])-1] ?? '#NUM'; },
+  SMALL: (a) => { const s = flat(Array.isArray(a[0])?a[0]:[a[0]]).map(toNum).sort((x,y)=>x-y); return s[toNum(a[1])-1] ?? '#NUM'; },
+  RANK: (a) => { const [v, r] = a; const arr = flat(Array.isArray(r)?r:[r]).map(toNum).sort((x,y)=>y-x); return arr.indexOf(toNum(v))+1 || '#N/A'; },
+  STDEV: (a) => { const f = flat(a).map(toNum); const avg = f.reduce((s,v)=>s+v,0)/f.length; return Math.sqrt(f.reduce((s,v)=>s+(v-avg)**2,0)/(f.length-1)); },
+  VAR: (a) => { const f = flat(a).map(toNum); const avg = f.reduce((s,v)=>s+v,0)/f.length; return f.reduce((s,v)=>s+(v-avg)**2,0)/(f.length-1); },
+  MODE: (a) => { const f = flat(a).map(toNum); const freq = {}; f.forEach(v => freq[v]=(freq[v]||0)+1); return +Object.entries(freq).sort((a,b)=>b[1]-a[1])[0][0]; },
+  PERCENTILE: (a) => { const arr = flat(Array.isArray(a[0])?a[0]:[a[0]]).map(toNum).sort((x,y)=>x-y); const k = toNum(a[1]); const i = k*(arr.length-1); const lo = Math.floor(i); const hi = Math.ceil(i); return lo===hi ? arr[lo] : arr[lo]+(arr[hi]-arr[lo])*(i-lo); },
+
+  // Logic
+  IF: (a) => a[0] ? a[1] : a[2],
+  AND: (a) => flat(a).every(Boolean),
+  OR: (a) => flat(a).some(Boolean),
+  NOT: (a) => !a[0],
+  IFERROR: (a) => { return (a[0] !== '#ERROR' && a[0] !== '#ERR' && !String(a[0]).startsWith('#')) ? a[0] : a[1]; },
+  IFS: (a) => { for (let i = 0; i < a.length; i += 2) { if (a[i]) return a[i+1]; } return '#N/A'; },
+  SWITCH: (a) => { const v = a[0]; for (let i = 1; i < a.length-1; i += 2) { if (v == a[i]) return a[i+1]; } return a.length%2===0 ? a[a.length-1] : '#N/A'; },
+  CHOOSE: (a) => a[toNum(a[0])] ?? '#VALUE',
+  ISBLANK: (a) => a[0] === '' || a[0] === null || a[0] === undefined || a[0] === 0,
+  ISNUMBER: (a) => typeof a[0] === 'number' || !isNaN(+a[0]),
+  ISTEXT: (a) => typeof a[0] === 'string' && isNaN(+a[0]),
+  ISERROR: (a) => String(a[0]).startsWith('#'),
+  ISEVEN: (a) => toNum(a[0]) % 2 === 0,
+  ISODD: (a) => toNum(a[0]) % 2 !== 0,
+
+  // Lookup
+  VLOOKUP: () => '#USE_SPECIAL',
+  HLOOKUP: () => '#USE_SPECIAL',
+  INDEX: (a) => { if (Array.isArray(a[0])) return a[0][toNum(a[1])-1] ?? '#REF'; return a[0]; },
+  MATCH: (a) => { const arr = flat(Array.isArray(a[1])?a[1]:[a[1]]); const idx = arr.findIndex(v => v == a[0] || String(v).toLowerCase()===String(a[0]).toLowerCase()); return idx >= 0 ? idx+1 : '#N/A'; },
+  ROW: () => selectedCell.row + 1,
+  COLUMN: () => selectedCell.col + 1,
+  ROWS: (a) => Array.isArray(a[0]) ? a[0].length : 1,
+  COLUMNS: () => 1,
+
+  // Text
+  CONCATENATE: (a) => flat(a).join(''),
+  CONCAT: (a) => flat(a).join(''),
+  TEXTJOIN: (a) => { const [d, skip, ...rest] = a; const vals = flat(rest); return (skip ? vals.filter(v => v !== '' && v != null) : vals).join(d); },
+  LEFT: (a) => String(a[0]).substring(0, toNum(a[1] ?? 1)),
+  RIGHT: (a) => { const s = String(a[0]); return s.substring(s.length - toNum(a[1] ?? 1)); },
+  MID: (a) => String(a[0]).substring(toNum(a[1])-1, toNum(a[1])-1+toNum(a[2])),
+  LEN: (a) => String(a[0]).length,
+  UPPER: (a) => String(a[0]).toUpperCase(),
+  LOWER: (a) => String(a[0]).toLowerCase(),
+  PROPER: (a) => String(a[0]).replace(/\b\w/g, c => c.toUpperCase()),
+  TRIM: (a) => String(a[0]).trim(),
+  CLEAN: (a) => String(a[0]).replace(/[\x00-\x1F]/g, ''),
+  EXACT: (a) => String(a[0]) === String(a[1]),
+  REPLACE: (a) => { const s = String(a[0]); const st = toNum(a[1])-1; const len = toNum(a[2]); return s.substring(0,st)+String(a[3])+s.substring(st+len); },
+  SUBSTITUTE: (a) => { const [text, old, rep, nth] = a; if (nth) { let i = 0; return String(text).replace(new RegExp(escapeRegex(String(old)), 'g'), m => (++i===toNum(nth)) ? rep : m); } return String(text).split(String(old)).join(String(rep)); },
+  FIND: (a) => { const idx = String(a[1]).indexOf(String(a[0]), toNum(a[2]??1)-1); return idx >= 0 ? idx+1 : '#VALUE'; },
+  SEARCH: (a) => { const idx = String(a[1]).toLowerCase().indexOf(String(a[0]).toLowerCase(), toNum(a[2]??1)-1); return idx >= 0 ? idx+1 : '#VALUE'; },
+  REPT: (a) => String(a[0]).repeat(Math.min(toNum(a[1]), 10000)),
+  TEXT: (a) => formatText(a[0], String(a[1])),
+  VALUE: (a) => toNum(String(a[0]).replace(/[^0-9.\-]/g, '')),
+  DOLLAR: (a) => '$' + toNum(a[0]).toFixed(toNum(a[1] ?? 2)),
+  FIXED: (a) => toNum(a[0]).toFixed(toNum(a[1] ?? 2)),
+  CHAR: (a) => String.fromCharCode(toNum(a[0])),
+  CODE: (a) => String(a[0]).charCodeAt(0),
+  T: (a) => typeof a[0] === 'string' ? a[0] : '',
+  N: (a) => typeof a[0] === 'number' ? a[0] : 0,
+
+  // Date
+  NOW: () => new Date().toLocaleString(),
+  TODAY: () => new Date().toLocaleDateString(),
+  YEAR: (a) => new Date(a[0]).getFullYear(),
+  MONTH: (a) => new Date(a[0]).getMonth() + 1,
+  DAY: (a) => new Date(a[0]).getDate(),
+  HOUR: (a) => new Date(a[0]).getHours(),
+  MINUTE: (a) => new Date(a[0]).getMinutes(),
+  SECOND: (a) => new Date(a[0]).getSeconds(),
+  DAYS: (a) => Math.round((new Date(a[0]) - new Date(a[1])) / 86400000),
+  EDATE: (a) => { const d = new Date(a[0]); d.setMonth(d.getMonth()+toNum(a[1])); return d.toLocaleDateString(); },
+  EOMONTH: (a) => { const d = new Date(a[0]); d.setMonth(d.getMonth()+toNum(a[1])+1, 0); return d.toLocaleDateString(); },
+  DATE: (a) => new Date(toNum(a[0]), toNum(a[1])-1, toNum(a[2])).toLocaleDateString(),
+  WEEKDAY: (a) => new Date(a[0]).getDay() + 1,
+  WEEKNUM: (a) => { const d = new Date(a[0]); const s = new Date(d.getFullYear(),0,1); return Math.ceil(((d-s)/86400000+s.getDay()+1)/7); },
+  NETWORKDAYS: (a) => { const s = new Date(a[0]); const e = new Date(a[1]); let c = 0; const d = new Date(s); while(d<=e){const dy=d.getDay(); if(dy!==0&&dy!==6) c++; d.setDate(d.getDate()+1);} return c; },
+  DATEDIF: (a) => { const s = new Date(a[0]); const e = new Date(a[1]); const u = String(a[2]).toUpperCase(); if(u==='D') return Math.round((e-s)/86400000); if(u==='M') return (e.getFullYear()-s.getFullYear())*12+e.getMonth()-s.getMonth(); if(u==='Y') return e.getFullYear()-s.getFullYear(); return '#VALUE'; },
+
+  // Financial
+  PMT: (a) => { const [rate,nper,pv,fv=0] = a.map(toNum); if(rate===0) return -(pv+fv)/nper; return -(pv*rate*Math.pow(1+rate,nper)+fv*rate)/(Math.pow(1+rate,nper)-1); },
+  FV: (a) => { const [rate,nper,pmt,pv=0] = a.map(toNum); if(rate===0) return -(pv+pmt*nper); return -(pv*Math.pow(1+rate,nper)+pmt*(Math.pow(1+rate,nper)-1)/rate); },
+  PV: (a) => { const [rate,nper,pmt,fv=0] = a.map(toNum); if(rate===0) return -(fv+pmt*nper); return -(fv/Math.pow(1+rate,nper)+pmt*(1-Math.pow(1+rate,-nper))/rate); },
+  NPV: (a) => { const rate = toNum(a[0]); return flat(a.slice(1)).map(toNum).reduce((s,cf,i) => s+cf/Math.pow(1+rate,i+1), 0); },
+  IRR: (a) => { const flows = flat(Array.isArray(a[0])?a[0]:a).map(toNum); let g = 0.1; for(let i=0;i<100;i++){let npv=0,dn=0; flows.forEach((cf,j)=>{npv+=cf/Math.pow(1+g,j); dn-=j*cf/Math.pow(1+g,j+1);}); const n=g-npv/dn; if(Math.abs(n-g)<1e-10) return Math.round(n*1e8)/1e8; g=n;} return '#NUM'; },
+};
+
+function callFunction(name, args) {
+  const fn = FORMULA_FUNCS[name];
+  if (!fn) return '#NAME?';
+  return fn(args);
+}
+
+function matchCriteria(val, criteria) {
+  const s = String(criteria);
+  if (s.startsWith('>=')) return toNum(val) >= toNum(s.slice(2));
+  if (s.startsWith('<=')) return toNum(val) <= toNum(s.slice(2));
+  if (s.startsWith('<>')) return String(val) !== s.slice(2);
+  if (s.startsWith('>')) return toNum(val) > toNum(s.slice(1));
+  if (s.startsWith('<')) return toNum(val) < toNum(s.slice(1));
+  if (s.includes('*') || s.includes('?')) {
+    const escaped = s.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp('^' + escaped.replace(/\\\*/g, '.*').replace(/\\\?/g, '.') + '$', 'i');
+    return regex.test(String(val));
+  }
+  return String(val).toLowerCase() === s.toLowerCase() || toNum(val) === toNum(s);
+}
+
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function formatText(val, fmt) {
+  if (fmt === '0%') return (toNum(val) * 100).toFixed(0) + '%';
+  if (fmt === '0.00') return toNum(val).toFixed(2);
+  if (fmt.includes('$')) return '$' + toNum(val).toFixed(2);
+  return String(val);
 }
 
 function evalVlookup(expr, sheet, sheetIdx) {
@@ -880,10 +1129,12 @@ function getCellStyle(cell) {
   if (cell.bold) parts.push('font-weight:700');
   if (cell.italic) parts.push('font-style:italic');
   if (cell.underline) parts.push('text-decoration:underline');
-  if (cell.textColor) parts.push(`color:${cell.textColor}`);
-  if (cell._condColor) parts.push(`background:${cell._condColor}33;border-left:3px solid ${cell._condColor}`);
-  else if (cell.fillColor && cell.fillColor !== '#1a1a2e') parts.push(`background:${cell.fillColor}`);
-  if (cell.align) parts.push(`justify-content:${cell.align === 'left' ? 'flex-start' : cell.align === 'right' ? 'flex-end' : 'center'}`);
+  const tc = sanitizeColor(cell.textColor);
+  if (tc) parts.push(`color:${tc}`);
+  const cc = sanitizeColor(cell._condColor);
+  if (cc) parts.push(`background:${cc}33;border-left:3px solid ${cc}`);
+  else { const fc = sanitizeColor(cell.fillColor); if (fc && fc !== '#1a1a2e') parts.push(`background:${fc}`); }
+  if (cell.align && /^(left|center|right)$/.test(cell.align)) parts.push(`justify-content:${cell.align === 'left' ? 'flex-start' : cell.align === 'right' ? 'flex-end' : 'center'}`);
   return parts.join(';');
 }
 
@@ -1418,9 +1669,10 @@ function loadFile(event) {
           importCSV(e.target.result);
         } else {
           const data = JSON.parse(e.target.result);
-          sheets = data.sheets;
-          activeSheet = data.activeSheet || 0;
-          document.getElementById('file-name').value = data.fileName || file.name.replace('.qx', '');
+          if (!data.sheets || !Array.isArray(data.sheets)) throw new Error('Invalid file');
+          sheets = data.sheets.map(s => sanitizeSheetData(s));
+          activeSheet = Math.max(0, Math.min(toNum(data.activeSheet || 0), sheets.length - 1));
+          document.getElementById('file-name').value = escapeHTML(String(data.fileName || file.name.replace('.qx', '')));
           renderSheetTabs();
           renderSheet();
           selectCell(0, 0);
@@ -1538,13 +1790,33 @@ function exportExcel() {
     for (let r = 0; r <= maxR; r++) {
       const row = [];
       for (let c = 0; c <= maxC; c++) {
-        const cell = sheet.cells[cellKey(r, c)];
-        row.push(cell ? (cell.value ?? '') : '');
+        row.push('');
       }
       data.push(row);
     }
 
     const ws = XLSX.utils.aoa_to_sheet(data);
+
+    // Write values and formulas into worksheet cells
+    for (let r = 0; r <= maxR; r++) {
+      for (let c = 0; c <= maxC; c++) {
+        const cell = sheet.cells[cellKey(r, c)];
+        if (!cell) continue;
+        const addr = XLSX.utils.encode_cell({ r, c });
+        if (cell.formula) {
+          // Strip leading '=' for XLSX format
+          ws[addr] = { t: 'n', f: cell.formula.replace(/^=/, ''), v: cell.value ?? 0 };
+        } else if (cell.value !== undefined && cell.value !== '') {
+          const v = cell.value;
+          if (typeof v === 'number' || (typeof v === 'string' && !isNaN(v) && v.trim() !== '')) {
+            ws[addr] = { t: 'n', v: Number(v) };
+          } else {
+            ws[addr] = { t: 's', v: String(v) };
+          }
+        }
+      }
+    }
+
     XLSX.utils.book_append_sheet(wb, ws, sheet.name);
   });
 
@@ -1567,6 +1839,8 @@ function exportCSV() {
     for (let c = 0; c <= maxC; c++) {
       const cell = sheet.cells[cellKey(r, c)];
       let val = cell ? String(cell.value ?? '') : '';
+      // Prevent CSV formula injection
+      if (/^[=+\-@\t\r]/.test(val)) { val = "'" + val; }
       if (val.includes(',') || val.includes('"') || val.includes('\n')) {
         val = '"' + val.replace(/"/g, '""') + '"';
       }
@@ -2011,7 +2285,43 @@ function escapeHTML(str) {
 }
 
 function escapeAttr(str) {
-  return String(str).replace(/"/g, '&quot;');
+  return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function sanitizeSheetData(sheet) {
+  const clean = createSheetData(String(sheet.name || 'Sheet').substring(0, 50));
+  if (sheet.colWidths) {
+    for (const [k, v] of Object.entries(sheet.colWidths)) {
+      const idx = toNum(k);
+      if (idx >= 0 && idx < COLS) clean.colWidths[idx] = Math.max(40, Math.min(500, toNum(v)));
+    }
+  }
+  if (sheet.cells && typeof sheet.cells === 'object') {
+    const allowed = ['value', 'formula', 'bold', 'italic', 'underline', 'textColor', 'fillColor', 'align', 'detectedType', 'formatType', 'validation', 'merge', '_mergedInto', '_condColor'];
+    for (const [key, cell] of Object.entries(sheet.cells)) {
+      if (!cell || typeof cell !== 'object') continue;
+      const c = {};
+      for (const prop of allowed) {
+        if (cell[prop] !== undefined) {
+          if ((prop === 'textColor' || prop === 'fillColor' || prop === '_condColor') && !isValidColor(cell[prop])) continue;
+          if (prop === 'align' && !/^(left|center|right)$/.test(cell[prop])) continue;
+          if (prop === 'formula' && typeof cell[prop] === 'string' && !cell[prop].startsWith('=')) continue;
+          if (prop === 'bold' || prop === 'italic' || prop === 'underline') { c[prop] = !!cell[prop]; continue; }
+          c[prop] = cell[prop];
+        }
+      }
+      clean.cells[key] = c;
+    }
+  }
+  return clean;
+}
+
+function isValidColor(c) {
+  return /^#[0-9a-fA-F]{3,8}$/.test(c);
+}
+
+function sanitizeColor(c) {
+  return isValidColor(c) ? c : '';
 }
 
 function toNum(v) {

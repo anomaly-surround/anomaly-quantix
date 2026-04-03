@@ -384,6 +384,11 @@ body {
   outline-offset: -1px;
 }
 
+/* Formula reference highlights */
+#sheet tbody td.formula-ref .cell {
+  transition: outline 0.15s, background-color 0.15s;
+}
+
 /* Data type styling */
 .cell[data-type="number"], .cell[data-type="currency"], .cell[data-type="percent"] {
   justify-content: flex-end;
