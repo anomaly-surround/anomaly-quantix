@@ -146,6 +146,7 @@ function renderSheet() {
 
   attachCellEvents();
   attachResizeEvents();
+  repositionAllCharts();
 
   // Remove old scroll listener and re-add
   container.removeEventListener('scroll', onSheetScroll);
@@ -2145,7 +2146,8 @@ function createChart() {
   drawChart(ctx, canvas, type, title, labels, datasets);
 
   // Place chart on the sheet
-  placeChartOnSheet(type, title, labels, datasets, rangeStr);
+  const targetStr = document.getElementById('chart-target').value.toUpperCase().trim();
+  placeChartOnSheet(type, title, labels, datasets, rangeStr, targetStr);
   document.getElementById('chart-modal').style.display = 'none';
 }
 
@@ -2302,15 +2304,25 @@ function roundRect(ctx, x, y, w, h, r) {
 
 let sheetCharts = [];
 
-function placeChartOnSheet(type, title, labels, datasets, rangeStr) {
+function placeChartOnSheet(type, title, labels, datasets, rangeStr, targetStr) {
   const container = document.getElementById('sheet-container');
   const id = 'chart-' + Date.now();
 
+  // Parse target cell range
+  let anchorCells = null;
+  const targetMatch = targetStr.match(/^([A-Z])(\d+):([A-Z])(\d+)$/);
+  if (targetMatch) {
+    anchorCells = {
+      c1: targetMatch[1].charCodeAt(0) - 65,
+      r1: +targetMatch[2] - 1,
+      c2: targetMatch[3].charCodeAt(0) - 65,
+      r2: +targetMatch[4] - 1
+    };
+  }
+
   const wrapper = document.createElement('div');
-  wrapper.className = 'floating-chart';
+  wrapper.className = 'floating-chart' + (anchorCells ? ' anchored-chart' : '');
   wrapper.id = id;
-  wrapper.style.left = (container.scrollLeft + 60) + 'px';
-  wrapper.style.top = (container.scrollTop + 30) + 'px';
 
   const header = document.createElement('div');
   header.className = 'floating-chart-header';
@@ -2325,90 +2337,123 @@ function placeChartOnSheet(type, title, labels, datasets, rangeStr) {
   canvas.height = 300;
   canvas.className = 'floating-chart-canvas';
 
-  const resizeHandle = document.createElement('div');
-  resizeHandle.className = 'floating-chart-resize';
-
   wrapper.appendChild(header);
   wrapper.appendChild(canvas);
-  wrapper.appendChild(resizeHandle);
+
+  if (!anchorCells) {
+    // Floating mode: add resize handle and drag/resize logic
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'floating-chart-resize';
+    wrapper.appendChild(resizeHandle);
+    wrapper.style.left = (container.scrollLeft + 60) + 'px';
+    wrapper.style.top = (container.scrollTop + 30) + 'px';
+
+    setupDrag(wrapper, header);
+    setupResize(wrapper, canvas, resizeHandle, type, title, labels, datasets);
+  }
+
   container.appendChild(wrapper);
 
-  const chartData = { id, type, title, labels, datasets, rangeStr, wrapper, canvas };
+  const chartData = { id, type, title, labels, datasets, rangeStr, wrapper, canvas, anchorCells };
   sheetCharts.push(chartData);
 
-  // Draw
+  if (anchorCells) {
+    positionAnchoredChart(chartData);
+  }
+
   const ctx = canvas.getContext('2d');
   drawChart(ctx, canvas, type, title, labels, datasets);
+}
 
-  // Dragging
+function positionAnchoredChart(chart) {
+  if (!chart.anchorCells) return;
+  const { c1, r1, c2, r2 } = chart.anchorCells;
+
+  // Find bounding box from actual cell positions
+  const topLeftTd = getCellTd(r1, c1);
+  const bottomRightTd = getCellTd(r2, c2);
+  const container = document.getElementById('sheet-container');
+  const table = document.getElementById('sheet');
+
+  if (topLeftTd && bottomRightTd) {
+    const tableRect = table.getBoundingClientRect();
+    const tlRect = topLeftTd.getBoundingClientRect();
+    const brRect = bottomRightTd.getBoundingClientRect();
+
+    const left = tlRect.left - tableRect.left;
+    const top = tlRect.top - tableRect.top;
+    const width = brRect.right - tlRect.left;
+    const height = brRect.bottom - tlRect.top;
+
+    chart.wrapper.style.left = left + 'px';
+    chart.wrapper.style.top = top + 'px';
+    chart.wrapper.style.width = width + 'px';
+
+    const headerH = chart.wrapper.querySelector('.floating-chart-header').offsetHeight || 28;
+    const canvasH = Math.max(100, height - headerH);
+    chart.canvas.width = width;
+    chart.canvas.height = canvasH;
+    chart.canvas.style.height = canvasH + 'px';
+
+    drawChart(chart.canvas.getContext('2d'), chart.canvas, chart.type, chart.title, chart.labels, chart.datasets);
+  } else {
+    // Cells not visible yet — estimate from row/col sizes
+    const sheet = sheets[activeSheet];
+    let left = 40; // row header width
+    for (let c = 0; c < c1; c++) left += (sheet.colWidths[c] || 80);
+    let width = 0;
+    for (let c = c1; c <= c2; c++) width += (sheet.colWidths[c] || 80);
+    const top = r1 * ROW_HEIGHT;
+    const height = (r2 - r1 + 1) * ROW_HEIGHT;
+
+    chart.wrapper.style.left = left + 'px';
+    chart.wrapper.style.top = top + 'px';
+    chart.wrapper.style.width = width + 'px';
+
+    const headerH = 28;
+    const canvasH = Math.max(100, height - headerH);
+    chart.canvas.width = width;
+    chart.canvas.height = canvasH;
+    chart.canvas.style.height = canvasH + 'px';
+
+    drawChart(chart.canvas.getContext('2d'), chart.canvas, chart.type, chart.title, chart.labels, chart.datasets);
+  }
+}
+
+function repositionAllCharts() {
+  sheetCharts.forEach(chart => {
+    if (chart.anchorCells) positionAnchoredChart(chart);
+  });
+}
+
+function setupDrag(wrapper, header) {
   let dragging = false, dragX, dragY, startLeft, startTop;
-  header.addEventListener('mousedown', (e) => {
-    dragging = true;
-    dragX = e.clientX;
-    dragY = e.clientY;
-    startLeft = wrapper.offsetLeft;
-    startTop = wrapper.offsetTop;
-    e.preventDefault();
-  });
-  header.addEventListener('touchstart', (e) => {
-    dragging = true;
-    dragX = e.touches[0].clientX;
-    dragY = e.touches[0].clientY;
-    startLeft = wrapper.offsetLeft;
-    startTop = wrapper.offsetTop;
-    e.preventDefault();
-  });
+  const onStart = (x, y) => { dragging = true; dragX = x; dragY = y; startLeft = wrapper.offsetLeft; startTop = wrapper.offsetTop; };
+  header.addEventListener('mousedown', (e) => { onStart(e.clientX, e.clientY); e.preventDefault(); });
+  header.addEventListener('touchstart', (e) => { onStart(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); });
+  const onMove = (x, y) => { if (!dragging) return; wrapper.style.left = (startLeft + x - dragX) + 'px'; wrapper.style.top = (startTop + y - dragY) + 'px'; };
+  document.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+  document.addEventListener('touchmove', (e) => onMove(e.touches[0].clientX, e.touches[0].clientY));
+  document.addEventListener('mouseup', () => { dragging = false; });
+  document.addEventListener('touchend', () => { dragging = false; });
+}
 
-  const onDragMove = (e) => {
-    if (!dragging) return;
-    const cx = e.clientX ?? e.touches?.[0]?.clientX;
-    const cy = e.clientY ?? e.touches?.[0]?.clientY;
-    wrapper.style.left = (startLeft + cx - dragX) + 'px';
-    wrapper.style.top = (startTop + cy - dragY) + 'px';
-  };
-  const onDragEnd = () => { dragging = false; };
-  document.addEventListener('mousemove', onDragMove);
-  document.addEventListener('mouseup', onDragEnd);
-  document.addEventListener('touchmove', onDragMove);
-  document.addEventListener('touchend', onDragEnd);
-
-  // Resizing
+function setupResize(wrapper, canvas, handle, type, title, labels, datasets) {
   let resizing = false, resizeX, resizeY, startW, startH;
-  resizeHandle.addEventListener('mousedown', (e) => {
-    resizing = true;
-    resizeX = e.clientX;
-    resizeY = e.clientY;
-    startW = canvas.width;
-    startH = canvas.height;
-    e.preventDefault();
-    e.stopPropagation();
-  });
-  resizeHandle.addEventListener('touchstart', (e) => {
-    resizing = true;
-    resizeX = e.touches[0].clientX;
-    resizeY = e.touches[0].clientY;
-    startW = canvas.width;
-    startH = canvas.height;
-    e.preventDefault();
-    e.stopPropagation();
-  });
-
-  const onResizeMove = (e) => {
+  const onStart = (x, y) => { resizing = true; resizeX = x; resizeY = y; startW = canvas.width; startH = canvas.height; };
+  handle.addEventListener('mousedown', (e) => { onStart(e.clientX, e.clientY); e.preventDefault(); e.stopPropagation(); });
+  handle.addEventListener('touchstart', (e) => { onStart(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); e.stopPropagation(); });
+  const onMove = (x, y) => {
     if (!resizing) return;
-    const cx = e.clientX ?? e.touches?.[0]?.clientX;
-    const cy = e.clientY ?? e.touches?.[0]?.clientY;
-    const newW = Math.max(250, startW + cx - resizeX);
-    const newH = Math.max(180, startH + cy - resizeY);
-    canvas.width = newW;
-    canvas.height = newH;
-    wrapper.style.width = newW + 'px';
+    canvas.width = Math.max(250, startW + x - resizeX);
+    canvas.height = Math.max(180, startH + y - resizeY);
+    wrapper.style.width = canvas.width + 'px';
     drawChart(canvas.getContext('2d'), canvas, type, title, labels, datasets);
   };
-  const onResizeEnd = () => { resizing = false; };
-  document.addEventListener('mousemove', onResizeMove);
-  document.addEventListener('mouseup', onResizeEnd);
-  document.addEventListener('touchmove', onResizeMove);
-  document.addEventListener('touchend', onResizeEnd);
+  document.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+  document.addEventListener('touchmove', (e) => onMove(e.touches[0].clientX, e.touches[0].clientY));
+  document.addEventListener('mouseup', () => { resizing = false; });
+  document.addEventListener('touchend', () => { resizing = false; });
 }
 
 function removeSheetChart(id) {
