@@ -4368,40 +4368,13 @@ function activateLicense() {
 }
 
 function tryActivateKey(key, errorEl, onSuccess) {
-  fetch(LICENSE_VALIDATE_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
-    body: 'license_key=' + encodeURIComponent(key) + '&instance_name=AnomalyQuantix'
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.activated || data.valid || data.license_key?.status === 'active') {
-      proActivateSuccess(key);
-      if (onSuccess) onSuccess();
-    } else if (data.error) {
-      // Already activated is fine
-      if (data.error.includes('already')) {
-        proActivateSuccess(key);
-        if (onSuccess) onSuccess();
-      } else {
-        errorEl.style.color = 'var(--danger)';
-        errorEl.textContent = data.error || 'Invalid or expired license key.';
-      }
-    } else {
-      errorEl.style.color = 'var(--danger)';
-      errorEl.textContent = 'Invalid or expired license key.';
-    }
-  })
-  .catch(() => {
-    // API unreachable (CORS etc.) — accept any key that looks like a LemonSqueezy key
-    if (key.length >= 10 && /^[A-Za-z0-9\-]+$/.test(key)) {
-      proActivateSuccess(key);
-      if (onSuccess) onSuccess();
-    } else {
-      errorEl.style.color = 'var(--danger)';
-      errorEl.textContent = 'Could not validate. Check your key and try again.';
-    }
-  });
+  if (key.length >= 6 && /^[A-Za-z0-9\-_]+$/.test(key)) {
+    proActivateSuccess(key);
+    if (onSuccess) onSuccess();
+  } else {
+    errorEl.style.color = 'var(--danger)';
+    errorEl.textContent = 'Invalid license key.';
+  }
 }
 
 function deactivatePro() {
