@@ -1646,9 +1646,11 @@ function showContextMenu(x, y, row, col) {
   document.body.appendChild(menu);
 
   // Adjust if off-screen
+  menu.style.maxHeight = (window.innerHeight - 20) + 'px';
+  menu.style.overflowY = 'auto';
   const rect = menu.getBoundingClientRect();
-  if (rect.right > window.innerWidth) menu.style.left = (x - rect.width) + 'px';
-  if (rect.bottom > window.innerHeight) menu.style.top = (y - rect.height) + 'px';
+  if (rect.right > window.innerWidth) menu.style.left = Math.max(5, x - rect.width) + 'px';
+  if (rect.bottom > window.innerHeight) menu.style.top = Math.max(5, window.innerHeight - rect.height - 10) + 'px';
 
   setTimeout(() => document.addEventListener('click', removeContextMenu, { once: true }), 10);
 }

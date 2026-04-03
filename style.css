@@ -952,6 +952,10 @@ td.find-highlight .cell { outline: 2px solid var(--warning) !important; backgrou
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
 }
 
+.context-menu::-webkit-scrollbar { width: 6px; }
+.context-menu::-webkit-scrollbar-track { background: transparent; }
+.context-menu::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
 .context-menu button {
   display: flex;
   align-items: center;
