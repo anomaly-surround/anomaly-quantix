@@ -3682,6 +3682,19 @@ function performAutofill() {
   const MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
   const MONTHS_SHORT = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
 
+  function getOrdinalSuffix(n) {
+    const s = ['th','st','nd','rd'];
+    const v = n % 100;
+    return s[(v - 20) % 10] || s[v] || s[0];
+  }
+
+  function detectOrdinal(val) {
+    if (val === undefined || val === null) return null;
+    const m = String(val).match(/^(\d+)(st|nd|rd|th)$/i);
+    if (!m) return null;
+    return { num: parseInt(m[1]), suffix: m[2] };
+  }
+
   function detectSequenceIndex(val) {
     if (val === undefined || val === null) return null;
     const v = String(val).toLowerCase();
@@ -3722,6 +3735,12 @@ function performAutofill() {
           sheet.cells[key] = { ...(sheet.cells[key] || {}), value: matchCase(seqInfo.seq[newIdx], seqInfo.origCase), formula: undefined };
         } else if (typeof srcVal === 'number') {
           sheet.cells[key] = { ...(sheet.cells[key] || {}), value: srcVal + offset, formula: undefined, detectedType: 'number' };
+        } else if (detectOrdinal(srcVal)) {
+          const ord = detectOrdinal(srcVal);
+          const newNum = ord.num + offset;
+          const newSuffix = getOrdinalSuffix(newNum);
+          const casedSuffix = ord.suffix === ord.suffix.toUpperCase() ? newSuffix.toUpperCase() : newSuffix;
+          sheet.cells[key] = { ...(sheet.cells[key] || {}), value: newNum + casedSuffix, formula: undefined };
         } else if (typeof srcVal === 'string' && (/^\d{4}-\d{2}-\d{2}$/.test(srcVal) || /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(srcVal))) {
           const d = new Date(srcVal);
           d.setDate(d.getDate() + offset);
@@ -3746,6 +3765,12 @@ function performAutofill() {
           sheet.cells[key] = { ...(sheet.cells[key] || {}), value: matchCase(seqInfo.seq[newIdx], seqInfo.origCase), formula: undefined };
         } else if (typeof srcVal === 'number') {
           sheet.cells[key] = { ...(sheet.cells[key] || {}), value: srcVal + offset, formula: undefined, detectedType: 'number' };
+        } else if (detectOrdinal(srcVal)) {
+          const ord = detectOrdinal(srcVal);
+          const newNum = ord.num + offset;
+          const newSuffix = getOrdinalSuffix(newNum);
+          const casedSuffix = ord.suffix === ord.suffix.toUpperCase() ? newSuffix.toUpperCase() : newSuffix;
+          sheet.cells[key] = { ...(sheet.cells[key] || {}), value: newNum + casedSuffix, formula: undefined };
         } else {
           sheet.cells[key] = { ...(sheet.cells[key] || {}), value: srcVal, formula: undefined };
         }
