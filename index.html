@@ -92,8 +92,9 @@
         <img class="logo" src="icon-192.svg" alt="Q" width="32" height="32">
         <span class="brand-name">Anomaly Quantix</span>
       </div>
-      <button class="pro-btn" id="pro-btn" onclick="showProModal()">
-        <span id="pro-btn-label">Upgrade to Pro</span>
+      <button class="donate-btn" id="donate-btn" onclick="showDonateModal()">
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <span>Donate</span>
       </button>
       <div class="file-controls">
         <input type="text" id="file-name" value="Untitled Spreadsheet" spellcheck="false">
@@ -590,90 +591,29 @@
     </div>
   </div>
 
-  <!-- Pro Modal -->
-  <div class="modal-overlay" id="pro-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <!-- Donate Modal -->
+  <div class="modal-overlay" id="donate-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
     <div class="modal">
       <div class="modal-header">
-        <h2>Anomaly Quantix Pro</h2>
-        <button onclick="document.getElementById('pro-modal').style.display='none'">&times;</button>
+        <h2>Support the Project</h2>
+        <button onclick="document.getElementById('donate-modal').style.display='none'">&times;</button>
       </div>
-      <div class="modal-body pro-body">
-        <div id="pro-status-section"></div>
+      <div class="modal-body donate-body">
+        <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="var(--accent)" stroke-width="2" style="margin-bottom:12px;">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+        <p style="color:var(--text-dim);font-size:13px;margin-bottom:20px;">If Anomaly Quantix has been useful to you, consider a donation. Every bit helps keep the project going.</p>
 
-        <div id="pro-upgrade-section">
-          <div class="pro-features">
-            <div class="pro-feature"><span class="pro-check">&#10003;</span> Unlimited sheets (free: max 3)</div>
-            <div class="pro-feature"><span class="pro-check">&#10003;</span> Clean Excel exports (no branding)</div>
-            <div class="pro-feature"><span class="pro-check">&#10003;</span> Clean printing (no watermark)</div>
-            <div class="pro-feature"><span class="pro-check">&#10003;</span> Support the developer</div>
-          </div>
+        <a href="https://paypal.me/xNoblesse" target="_blank" class="donate-paypal-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797H9.603c-.536 0-.99.394-1.073.926l-.96 6.08z"/></svg>
+          Donate with PayPal
+        </a>
 
-          <button class="google-btn" id="google-signin-btn" onclick="signInWithGoogle()">
-            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 019.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 000 24c0 3.77.87 7.34 2.44 10.51l8.09-5.92z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-            Sign in with Google
-          </button>
-
-          <div class="pro-divider" id="google-signin-divider"><span>then</span></div>
-
-          <div class="pro-discount">
-            <input type="text" id="discount-code-input" placeholder="Discount code (optional)" spellcheck="false">
-          </div>
-          <a id="pro-checkout-btn" class="btn-primary pro-checkout" href="#" target="_blank" onclick="handleCheckout()">Get Pro</a>
-
-          <div class="pro-divider"><span>Already purchased? Enter your key</span></div>
-
-          <div class="pro-activate">
-            <input type="text" id="license-key-input" placeholder="Enter your license key" spellcheck="false">
-            <button class="btn-primary" onclick="activateLicense()">Activate</button>
-          </div>
-          <p id="license-error" class="pro-error"></p>
+        <p style="font-size:11px;color:var(--text-dim);margin:20px 0 8px;text-transform:uppercase;letter-spacing:1px;">BEP-20 Address (BSC)</p>
+        <div class="donate-crypto">
+          <code id="cryptoAddr">0xa54b6ac437e94aeb8516b4308e9a191c20f001a3</code>
+          <button onclick="navigator.clipboard.writeText(document.getElementById('cryptoAddr').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)">Copy</button>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Purchase Confirmation Modal -->
-  <div class="modal-overlay" id="confirm-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
-    <div class="modal">
-      <div class="modal-header">
-        <h2>Thank You!</h2>
-        <button onclick="document.getElementById('confirm-modal').style.display='none'">&times;</button>
-      </div>
-      <div class="modal-body confirm-body">
-        <div class="confirm-icon">&#10003;</div>
-        <h3 class="confirm-title">Your purchase was successful!</h3>
-        <p class="confirm-subtitle">Welcome to Anomaly Quantix Pro</p>
-
-        <div class="confirm-steps">
-          <div class="confirm-step">
-            <span class="step-num">1</span>
-            <div>
-              <strong>Check your email</strong>
-              <p>LemonSqueezy sent you a receipt with your license key</p>
-            </div>
-          </div>
-          <div class="confirm-step">
-            <span class="step-num">2</span>
-            <div>
-              <strong>Copy your license key</strong>
-              <p>It looks like: <code>XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX</code></p>
-            </div>
-          </div>
-          <div class="confirm-step">
-            <span class="step-num">3</span>
-            <div>
-              <strong>Activate below</strong>
-              <p>Paste your key and click Activate</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="confirm-activate">
-          <input type="text" id="confirm-license-input" placeholder="Paste your license key here" spellcheck="false">
-          <button class="btn-primary" onclick="activateFromConfirm()">Activate</button>
-        </div>
-        <p id="confirm-license-error" class="pro-error"></p>
-        <p class="confirm-note">You can also activate later from the <strong>Pro</strong> button in the top bar.</p>
       </div>
     </div>
   </div>

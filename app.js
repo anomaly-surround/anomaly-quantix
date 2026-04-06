@@ -6,8 +6,6 @@ const ROWS = 1000;
 const COLS = 26;
 const VISIBLE_BUFFER = 10; // extra rows to render above/below viewport
 const COL_LETTERS = Array.from({ length: COLS }, (_, i) => String.fromCharCode(65 + i));
-const PRO_CHECKOUT_URL = 'https://aanomaly.lemonsqueezy.com/checkout/buy/c37c05a0-89a5-47a5-a1e6-bf90310f5090';
-const WORKER_URL = 'https://quantix-pro.xpropics.workers.dev';
 
 // State
 let sheets = [];
@@ -64,9 +62,6 @@ function init() {
   }
   checkDeadlines();
   setInterval(checkDeadlines, 60000); // check every minute
-  handleAuthCallback();
-  updateProUI();
-  checkProStatus();
 }
 
 // ============================================
@@ -2002,11 +1997,6 @@ function switchSheet(index) {
 }
 
 function addSheet() {
-  if (!isPro() && sheets.length >= FREE_MAX_SHEETS) {
-    showProModal();
-    document.getElementById('status-info').textContent = 'Free plan: max 3 sheets. Upgrade to Pro for unlimited.';
-    return;
-  }
   sheets.push(createSheetData('Sheet ' + (sheets.length + 1)));
   switchSheet(sheets.length - 1);
 }
@@ -4447,262 +4437,11 @@ if ('launchQueue' in window) {
 // Pro / Freemium
 // ============================================
 
-// Pro / Freemium Config (constants defined at top of file)
-
-function isPro() {
-  const data = localStorage.getItem('quantix-pro');
-  if (!data) return false;
-  try {
-    const pro = JSON.parse(data);
-    return pro && pro.pro === true;
-  } catch { return false; }
+// Donate modal
+function showDonateModal() {
+  document.getElementById('donate-modal').style.display = 'flex';
 }
 
-function getProData() {
-  try { return JSON.parse(localStorage.getItem('quantix-pro')) || null; } catch { return null; }
-}
-
-function getAuthToken() {
-  return localStorage.getItem('quantix-token');
-}
-
-function updateProUI() {
-  const btn = document.getElementById('pro-btn');
-  const label = document.getElementById('pro-btn-label');
-  const data = getProData();
-  if (isPro()) {
-    btn.classList.add('is-pro');
-    label.textContent = 'Pro';
-  } else if (data && data.email) {
-    btn.classList.remove('is-pro');
-    label.textContent = 'Upgrade to Pro';
-  } else {
-    btn.classList.remove('is-pro');
-    label.textContent = 'Upgrade to Pro';
-  }
-}
-
-function showProModal() {
-  const modal = document.getElementById('pro-modal');
-  const statusSection = document.getElementById('pro-status-section');
-  const upgradeSection = document.getElementById('pro-upgrade-section');
-  const data = getProData();
-
-  if (isPro() && data) {
-    statusSection.innerHTML = `
-      <div class="pro-status">
-        <h3>Pro Activated</h3>
-        <p>${escapeHTML(data.email)}</p>
-        <p style="margin-top:8px">Thank you for supporting Anomaly Quantix!</p>
-      </div>
-      <button class="btn-primary" onclick="signOut()" style="background:var(--danger);margin-right:8px">Sign Out</button>
-      <button class="btn-primary" onclick="deactivatePro()" style="background:var(--border)">Deactivate License</button>
-    `;
-    upgradeSection.style.display = 'none';
-  } else if (data && data.email && !data.pro) {
-    // Signed in but not Pro
-    statusSection.innerHTML = `
-      <div class="pro-status" style="border-color:var(--border)">
-        <h3>Signed in as</h3>
-        <p>${escapeHTML(data.email)}</p>
-        <button class="btn-primary" onclick="signOut()" style="background:var(--danger);margin-top:8px;font-size:11px;padding:5px 12px">Sign Out</button>
-      </div>
-    `;
-    upgradeSection.style.display = '';
-    document.getElementById('google-signin-btn').style.display = 'none';
-    document.getElementById('google-signin-divider').style.display = 'none';
-    document.getElementById('license-error').textContent = '';
-  } else {
-    statusSection.innerHTML = '';
-    upgradeSection.style.display = '';
-    document.getElementById('google-signin-btn').style.display = '';
-    document.getElementById('google-signin-divider').style.display = '';
-    document.getElementById('license-error').textContent = '';
-  }
-
-  modal.style.display = 'flex';
-}
-
-function signInWithGoogle() {
-  window.location.href = WORKER_URL + '/auth/google';
-}
-
-function signOut() {
-  localStorage.removeItem('quantix-pro');
-  localStorage.removeItem('quantix-token');
-  updateProUI();
-  document.getElementById('pro-modal').style.display = 'none';
-  document.getElementById('status-info').textContent = 'Signed out.';
-}
-
-function handleCheckout() {
-  const discount = document.getElementById('discount-code-input').value.trim();
-  const url = discount ? PRO_CHECKOUT_URL + '?checkout[discount_code]=' + encodeURIComponent(discount) : PRO_CHECKOUT_URL;
-  window.open(url, '_blank');
-}
-
-function activateFromConfirm() {
-  const input = document.getElementById('confirm-license-input');
-  const error = document.getElementById('confirm-license-error');
-  const key = input.value.trim();
-
-  if (!key) { error.textContent = 'Please enter a license key.'; return; }
-
-  error.textContent = 'Activating...';
-  error.style.color = 'var(--text-dim)';
-
-  tryActivateKey(key, error, () => {
-    document.getElementById('confirm-modal').style.display = 'none';
-  });
-}
-
-function activateLicense() {
-  const input = document.getElementById('license-key-input');
-  const error = document.getElementById('license-error');
-  const key = input.value.trim();
-
-  if (!key) { error.textContent = 'Please enter a license key.'; return; }
-
-  error.textContent = 'Activating...';
-  error.style.color = 'var(--text-dim)';
-
-  tryActivateKey(key, error, () => {
-    document.getElementById('pro-modal').style.display = 'none';
-  });
-}
-
-function tryActivateKey(key, errorEl, onSuccess) {
-  if (key.length < 6 || !/^[A-Za-z0-9\-_]+$/.test(key)) {
-    errorEl.style.color = 'var(--danger)';
-    errorEl.textContent = 'Invalid license key.';
-    return;
-  }
-
-  const token = getAuthToken();
-  if (!token) {
-    errorEl.style.color = 'var(--danger)';
-    errorEl.textContent = 'Please sign in with Google first.';
-    return;
-  }
-
-  fetch(WORKER_URL + '/api/activate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-    body: JSON.stringify({ key })
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.success) {
-      const proData = getProData() || {};
-      proData.pro = true;
-      proData.key = key;
-      localStorage.setItem('quantix-pro', JSON.stringify(proData));
-      updateProUI();
-      document.getElementById('status-info').textContent = 'Pro activated! Thank you!';
-      if (onSuccess) onSuccess();
-    } else {
-      errorEl.style.color = 'var(--danger)';
-      errorEl.textContent = data.error || 'Activation failed.';
-    }
-  })
-  .catch(() => {
-    errorEl.style.color = 'var(--danger)';
-    errorEl.textContent = 'Could not connect to server. Try again later.';
-  });
-}
-
-function deactivatePro() {
-  if (!confirm('Are you sure you want to deactivate your Pro license?')) return;
-
-  const token = getAuthToken();
-  if (token) {
-    fetch(WORKER_URL + '/api/deactivate', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token }
-    }).catch(() => {});
-  }
-
-  localStorage.removeItem('quantix-pro');
-  updateProUI();
-  document.getElementById('pro-modal').style.display = 'none';
-  document.getElementById('status-info').textContent = 'Pro deactivated.';
-}
-
-// Handle OAuth callback params on page load
-function handleAuthCallback() {
-  const params = new URLSearchParams(window.location.search);
-  const token = params.get('token');
-  const error = params.get('error');
-
-  if (!token && !error) return;
-
-  // Clean URL
-  window.history.replaceState({}, '', window.location.pathname);
-
-  if (error) {
-    document.getElementById('status-info').textContent = 'Login failed: ' + error;
-    return;
-  }
-
-  if (token) {
-    localStorage.setItem('quantix-token', token);
-
-    // Fetch user info and pro status
-    fetch(WORKER_URL + '/api/status', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.email) {
-        localStorage.setItem('quantix-pro', JSON.stringify({
-          email: data.email,
-          name: data.name,
-          picture: data.picture,
-          pro: data.pro,
-          key: data.licenseKey
-        }));
-        updateProUI();
-        if (data.pro) {
-          document.getElementById('status-info').textContent = 'Welcome back, ' + data.name + '! Pro is active.';
-        } else {
-          document.getElementById('status-info').textContent = 'Signed in as ' + data.email;
-        }
-      }
-    })
-    .catch(() => {
-      document.getElementById('status-info').textContent = 'Signed in (offline mode).';
-    });
-  }
-
-}
-
-// Check pro status on load if token exists
-function checkProStatus() {
-  const token = getAuthToken();
-  if (!token) return;
-
-  fetch(WORKER_URL + '/api/status', {
-    headers: { 'Authorization': 'Bearer ' + token }
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.email) {
-      localStorage.setItem('quantix-pro', JSON.stringify({
-        email: data.email,
-        name: data.name,
-        picture: data.picture,
-        pro: data.pro,
-        key: data.licenseKey
-      }));
-      updateProUI();
-    }
-  })
-  .catch(() => {}); // Silently fail if offline
-}
-
-// Feature gating
-const FREE_MAX_SHEETS = 3;
-
-// Override addSheet to enforce limit
-const _originalAddSheet = typeof addSheet === 'function' ? addSheet : null;
+// All features unlocked
+function isPro() { return true; }
 

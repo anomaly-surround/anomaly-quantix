@@ -210,9 +210,12 @@ body {
 }
 
 /* Pro button */
-.pro-btn {
+.donate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 5px 12px;
-  background: linear-gradient(135deg, #f39c12, #e67e22);
+  background: linear-gradient(135deg, #f59e0b, #d97706);
   border: none;
   color: #fff;
   border-radius: 6px;
@@ -224,139 +227,60 @@ body {
   flex-shrink: 0;
 }
 
-.pro-btn:hover { transform: scale(1.05); box-shadow: 0 2px 10px rgba(243, 156, 18, 0.4); }
+.donate-btn:hover { transform: scale(1.05); box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4); }
 
-.pro-btn.is-pro {
-  background: linear-gradient(135deg, var(--accent), #a29bfe);
-  cursor: default;
-}
+/* Donate modal */
+.donate-body { text-align: center; }
 
-.pro-btn.is-pro:hover { transform: none; box-shadow: none; }
-
-/* Pro modal */
-.pro-body { text-align: center; }
-
-.pro-price { margin-bottom: 20px; }
-.pro-amount { font-size: 36px; font-weight: 800; color: var(--text); }
-.pro-period { display: block; font-size: 13px; color: var(--text-dim); margin-top: 2px; }
-
-.pro-features { text-align: left; margin: 0 auto 20px; max-width: 300px; }
-
-.pro-feature {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 0;
-  font-size: 13px;
-  color: var(--text-dim);
-  border-bottom: 1px solid rgba(42, 42, 74, 0.3);
-}
-
-.pro-check { color: var(--success); font-weight: 700; font-size: 16px; }
-
-.pro-discount {
-  max-width: 250px;
-  margin: 0 auto 12px;
-}
-
-.pro-discount input {
-  width: 100%;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  text-align: center;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.pro-discount input:focus { border-color: var(--accent); }
-
-.pro-checkout {
-  display: inline-block;
-  padding: 12px 40px;
-  font-size: 15px;
-  text-decoration: none;
-  border-radius: 8px;
-  margin-bottom: 16px;
-}
-
-.pro-divider {
-  position: relative;
-  margin: 16px 0;
-  text-align: center;
-}
-
-.pro-divider::before {
-  content: '';
-  position: absolute;
-  left: 0; right: 0; top: 50%;
-  height: 1px;
-  background: var(--border);
-}
-
-.pro-divider span {
-  position: relative;
-  background: var(--bg-secondary);
-  padding: 0 12px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-
-.pro-activate {
-  display: flex;
-  gap: 8px;
-  max-width: 350px;
-  margin: 0 auto;
-}
-
-.pro-activate input {
-  flex: 1;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-family: var(--font-mono);
-  outline: none;
-}
-
-.pro-activate input:focus { border-color: var(--accent); }
-
-.pro-error { color: var(--danger); font-size: 12px; margin-top: 8px; min-height: 18px; }
-
-.google-btn {
+.donate-paypal-btn {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 24px;
-  background: white;
-  color: #333;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-  margin-bottom: 8px;
-}
-
-.google-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-
-.pro-status {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--accent);
+  gap: 8px;
+  padding: 12px 28px;
+  background: #0070ba;
+  color: white;
   border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
-  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s;
 }
 
-.pro-status h3 { color: var(--accent); font-size: 16px; margin-bottom: 4px; }
-.pro-status p { color: var(--text-dim); font-size: 13px; }
+.donate-paypal-btn:hover { background: #005ea6; box-shadow: 0 2px 10px rgba(0, 112, 186, 0.4); }
+
+.donate-crypto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 0 auto;
+  max-width: 420px;
+}
+
+.donate-crypto code {
+  font-size: 11px;
+  color: var(--accent);
+  word-break: break-all;
+  flex: 1;
+  text-align: left;
+  font-family: var(--font-mono);
+}
+
+.donate-crypto button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
 
 .file-controls {
   display: flex;
@@ -1490,78 +1414,7 @@ td .cell.has-comment::before {
 
 .print-watermark { display: none; }
 
-/* Purchase confirmation modal */
-.confirm-body { text-align: center; }
 
-.confirm-icon {
-  width: 60px;
-  height: 60px;
-  background: var(--success);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 30px;
-  color: white;
-  margin: 0 auto 12px;
-}
-
-.confirm-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
-.confirm-subtitle { font-size: 13px; color: var(--text-dim); margin-bottom: 20px; }
-
-.confirm-steps { text-align: left; max-width: 340px; margin: 0 auto 20px; }
-
-.confirm-step {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(42, 42, 74, 0.3);
-}
-
-.confirm-step:last-child { border-bottom: none; }
-
-.step-num {
-  width: 26px;
-  height: 26px;
-  background: var(--accent);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: white;
-  flex-shrink: 0;
-}
-
-.confirm-step strong { color: var(--text); font-size: 13px; }
-.confirm-step p { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
-.confirm-step code { background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
-
-.confirm-activate {
-  display: flex;
-  gap: 8px;
-  max-width: 380px;
-  margin: 0 auto;
-}
-
-.confirm-activate input {
-  flex: 1;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 10px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-family: var(--font-mono);
-  outline: none;
-}
-
-.confirm-activate input:focus { border-color: var(--accent); }
-
-.confirm-note { font-size: 11px; color: var(--text-dim); margin-top: 12px; }
-.confirm-note strong { color: var(--text); }
 
 /* === Row/Column hide indicators === */
 .hidden-row-indicator td:first-child {
@@ -1804,23 +1657,8 @@ tr.row-dragging {
   /* Floating charts */
   .floating-chart { width: 90vw !important; }
 
-  /* Pro button */
-  .pro-btn { padding: 4px 8px; font-size: 10px; }
-
-  /* Pro modal */
-  .pro-features { max-width: 100%; }
-  .pro-feature { font-size: 12px; padding: 6px 0; }
-  .pro-checkout { padding: 10px 30px; font-size: 14px; }
-  .pro-activate { flex-direction: column; max-width: 100%; }
-  .pro-activate input { width: 100%; }
-  .google-btn { width: 100%; justify-content: center; font-size: 13px; padding: 10px; }
-  .pro-divider span { font-size: 11px; }
-
-  /* Confirmation modal */
-  .confirm-activate { flex-direction: column; max-width: 100%; }
-  .confirm-activate input { width: 100%; }
-  .confirm-steps { max-width: 100%; }
-  .confirm-step { gap: 8px; }
+  /* Donate button */
+  .donate-btn { padding: 4px 8px; font-size: 10px; }
 
   /* Help modal */
   .help-body { max-height: 65vh; }
@@ -1828,6 +1666,5 @@ tr.row-dragging {
 }
 
 @media (max-width: 400px) {
-  .pro-btn { padding: 3px 6px; font-size: 9px; }
-  .pro-amount { font-size: 28px; }
+  .donate-btn { padding: 3px 6px; font-size: 9px; }
 }
